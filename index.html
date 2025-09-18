@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pelacak Bacaan Al-Qur'an</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue.js CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #e2e8f0;
+            transition: background 0.5s ease;
+        }
+
+        .bg-gradient-blue {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .shadow-custom {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div id="app" class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm mx-auto transform transition-all hover:scale-105 duration-300">
+        <div class="flex flex-col items-center mb-6">
+            <h1 class="text-3xl font-extrabold text-gray-800 mb-2 tracking-tight">Pelacak Bacaan</h1>
+            <p class="text-center text-sm text-gray-500 max-w-xs">Catat kemajuan Anda dan capai target harian.</p>
+        </div>
+
+        <!-- Pesan Notifikasi (jika ada) -->
+        <div v-if="pesanNotifikasi" class="bg-green-100 text-green-700 p-4 rounded-lg mb-6 text-sm">
+            {{ pesanNotifikasi }}
+        </div>
+
+        <!-- Input Nama Pengguna -->
+        <div class="mb-4">
+            <label for="userName" class="block text-sm font-semibold text-gray-700 mb-1">Nama Anda</label>
+            <div class="flex items-center gap-2">
+                <input type="text" id="userName" v-model.trim="namaUser" placeholder="Masukkan nama Anda"
+                       :disabled="isNamaUserSaved"
+                       class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 transition duration-200 focus:ring-2 disabled:bg-gray-200 disabled:cursor-not-allowed">
+                <button @click="toggleNamaUser"
+                        :class="{'bg-gray-400': !namaUser || showDeleteConfirmation}"
+                        :disabled="!namaUser || showDeleteConfirmation"
+                        class="bg-indigo-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-indigo-700 transition duration-300">
+                    {{ isNamaUserSaved ? 'Hapus' : 'Simpan' }}
+                </button>
+            </div>
+        </div>
+
+        <!-- Konfirmasi Hapus Nama -->
+        <div v-if="showDeleteConfirmation" class="bg-red-50 text-red-700 p-4 rounded-lg mb-4 text-sm text-center">
+            <p class="mb-2">Yakin ingin menghapus nama Anda?</p>
+            <div class="flex justify-center gap-4">
+                <button @click="confirmDeleteNama" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-300">Ya, Hapus</button>
+                <button @click="cancelDeleteNama" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition duration-300">Batal</button>
+            </div>
+        </div>
+
+        <!-- Input Halaman Awal -->
+        <div class="mb-4">
+            <label for="halamanAwal" class="block text-sm font-semibold text-gray-700 mb-1">Halaman Saat Ini</label>
+            <input type="number" id="halamanAwal" v-model.number="halamanSaatIni" placeholder="Contoh: 15"
+                   class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 transition duration-200 focus:ring-2">
+        </div>
+
+        <!-- Input Capaian Bacaan dengan tombol + dan - -->
+        <div class="mb-6">
+            <label for="halamanCapaian" class="block text-sm font-semibold text-gray-700 mb-1">Sudah Sampai Halaman</label>
+            <div class="flex items-center gap-2 mt-1">
+                <button @click="decrementHalaman"
+                        class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">
+                    -
+                </button>
+                <input type="number" id="halamanCapaian" v-model.number="halamanCapaian" placeholder="Contoh: 25"
+                       class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 text-center transition duration-200 focus:ring-2 font-bold">
+                <button @click="incrementHalaman"
+                        class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">
+                    +
+                </button>
+            </div>
+        </div>
+
+        <!-- Detail Target -->
+        <div class="bg-gray-50 p-6 rounded-2xl mb-6 shadow-inner border border-gray-100">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-600">Target Halaman</span>
+                <span class="text-sm font-bold text-gray-800">{{ targetHalaman }} halaman</span>
+            </div>
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-600">Target Hingga Halaman</span>
+                <span class="text-sm font-bold text-gray-800">{{ targetTotalHalaman }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-sm font-medium text-gray-600">Kekurangan Target</span>
+                <span :class="{'text-red-600 font-bold': kekuranganTarget > 0, 'text-green-600 font-bold': kekuranganTarget <= 0}">
+                    {{ kekuranganTarget > 0 ? kekuranganTarget + ' halaman' : 'Target Tercapai!' }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Notifikasi Status -->
+        <div v-if="!isNotifikasiDiaktifkan" class="text-center text-red-500 text-sm mb-4">
+            <p>Notifikasi belum diaktifkan. Silakan klik tombol di bawah.</p>
+        </div>
+        <div v-else class="text-center text-green-500 text-sm mb-4">
+            <p>Notifikasi aktif. Anda akan diingatkan setiap jam jika target belum tercapai.</p>
+        </div>
+
+        <!-- Tombol Aksi -->
+        <button @click="mintaIzinNotifikasi" :disabled="isNotifikasiDiaktifkan"
+                class="w-full bg-gradient-blue text-white font-semibold py-3 px-4 rounded-xl hover:scale-105 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:shadow-xl">
+            Aktifkan Notifikasi
+        </button>
+    </div>
+
+    <script type="text/javascript">
+        const app = Vue.createApp({
+            data() {
+                // Inisialisasi data dari localStorage atau nilai default
+                return {
+                    namaUser: localStorage.getItem('namaUser') || '',
+                    halamanSaatIni: parseInt(localStorage.getItem('halamanSaatIni')) || 1,
+                    halamanCapaian: parseInt(localStorage.getItem('halamanCapaian')) || 1,
+                    targetHalaman: 20,
+                    intervalId: null,
+                    isNotifikasiDiaktifkan: false,
+                    pesanNotifikasi: '',
+                    isNamaUserSaved: false, // Tambahan untuk mengontrol status nama
+                    showDeleteConfirmation: false, // Tambahan untuk menampilkan konfirmasi
+                };
+            },
+            computed: {
+                kekuranganTarget() {
+                    const kekurangan = this.targetTotalHalaman - this.halamanCapaian;
+                    return kekurangan > 0 ? kekurangan : 0;
+                },
+                targetTotalHalaman() {
+                    return this.halamanSaatIni + this.targetHalaman;
+                },
+                isTargetTercapai() {
+                    return this.halamanCapaian >= this.targetTotalHalaman;
+                }
+            },
+            watch: {
+                // Simpan data ke localStorage setiap kali ada perubahan
+                namaUser(newValue) {
+                    if (newValue) {
+                         localStorage.setItem('namaUser', newValue);
+                    } else {
+                        localStorage.removeItem('namaUser');
+                    }
+                },
+                halamanSaatIni(newValue) {
+                    localStorage.setItem('halamanSaatIni', newValue);
+                },
+                halamanCapaian(newValue) {
+                    localStorage.setItem('halamanCapaian', newValue);
+                },
+                isTargetTercapai(newValue) {
+                    if (newValue) {
+                        this.pesanNotifikasi = 'Selamat! Target bacaan Anda sudah tercapai.';
+                    } else {
+                        this.pesanNotifikasi = '';
+                    }
+                }
+            },
+            methods: {
+                incrementHalaman() {
+                    this.halamanCapaian++;
+                },
+                decrementHalaman() {
+                    if (this.halamanCapaian > 1) {
+                        this.halamanCapaian--;
+                    }
+                },
+                toggleNamaUser() {
+                    if (this.isNamaUserSaved) {
+                        this.showDeleteConfirmation = true;
+                    } else {
+                        this.isNamaUserSaved = true;
+                    }
+                },
+                confirmDeleteNama() {
+                    this.namaUser = '';
+                    this.isNamaUserSaved = false;
+                    this.showDeleteConfirmation = false;
+                },
+                cancelDeleteNama() {
+                    this.showDeleteConfirmation = false;
+                },
+                mintaIzinNotifikasi() {
+                    console.log("Meminta izin notifikasi. Status saat ini:", Notification.permission);
+                    if (!("Notification" in window)) {
+                        this.pesanNotifikasi = 'Browser Anda tidak mendukung notifikasi.';
+                        console.error("Browser tidak mendukung notifikasi.");
+                    } else if (Notification.permission === "granted") {
+                        this.isNotifikasiDiaktifkan = true;
+                        this.mulaiNotifikasi();
+                        this.pesanNotifikasi = 'Izin notifikasi telah diberikan.';
+                        console.log("Izin sudah diberikan, notifikasi diaktifkan.");
+                    } else if (Notification.permission !== "denied") {
+                        console.log("Meminta izin dari pengguna...");
+                        Notification.requestPermission().then(permission => {
+                            if (permission === "granted") {
+                                this.isNotifikasiDiaktifkan = true;
+                                this.mulaiNotifikasi();
+                                this.pesanNotifikasi = 'Notifikasi berhasil diaktifkan!';
+                                console.log("Izin notifikasi diberikan.");
+                            } else {
+                                this.pesanNotifikasi = 'Izin notifikasi ditolak.';
+                                console.log("Izin notifikasi ditolak.");
+                            }
+                        });
+                    } else {
+                        this.pesanNotifikasi = 'Izin notifikasi telah ditolak. Silakan ubah di pengaturan browser Anda.';
+                        console.warn("Izin sudah ditolak, tidak dapat meminta lagi.");
+                    }
+                },
+                tampilkanNotifikasi() {
+                    const currentHour = new Date().getHours();
+                    // Hanya tampilkan notifikasi antara jam 5 pagi (5) sampai jam 9 malam (21)
+                    if (currentHour < 5 || currentHour > 21) {
+                        console.log("Di luar jam notifikasi (5:00-21:00). Tidak menampilkan notifikasi.");
+                        return;
+                    }
+
+                    if (this.isTargetTercapai) {
+                        return;
+                    }
+
+                    if (this.kekuranganTarget > 0) {
+                        const namaPengguna = this.namaUser ? this.namaUser + ', ' : '';
+                        const title = 'Pengingat Bacaan Al-Qur\'an';
+                        const moonIcon = `
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2a10 10 0 0110 10c0 5.523-4.477 10-10 10S2 17.523 2 12a10 10 0 0110-10zm0 1.5a8.5 8.5 0 00-6.732 13.785 6.5 6.5 0 0110.875-10.457A8.497 8.497 0 0012 3.5z"/>
+                            </svg>
+                        `;
+
+                        const options = {
+                            body: `${namaPengguna}Anda masih perlu membaca ${this.kekuranganTarget} halaman lagi untuk mencapai target harian.`,
+                            icon: `data:image/svg+xml;utf8,${encodeURIComponent(moonIcon)}`,
+                        };
+                        console.log("Menampilkan notifikasi...");
+                        new Notification(title, options);
+                    }
+                },
+                mulaiNotifikasi() {
+                    if (this.intervalId) {
+                        clearInterval(this.intervalId);
+                    }
+                    this.intervalId = setInterval(() => {
+                        this.tampilkanNotifikasi();
+                    }, 1000 * 60 * 60);
+                },
+            },
+            mounted() {
+                // Inisialisasi status nama pengguna saat dimuat
+                if (localStorage.getItem('namaUser')) {
+                    this.isNamaUserSaved = true;
+                }
+
+                // Cek jika hari sudah berganti
+                const lastAccessedDate = localStorage.getItem('lastAccessedDate');
+                const today = new Date().toLocaleDateString();
+
+                if (lastAccessedDate !== today) {
+                    // Jika hari berganti, reset halaman capaian ke halaman saat ini
+                    this.halamanCapaian = this.halamanSaatIni;
+                    // Simpan tanggal baru ke localStorage
+                    localStorage.setItem('lastAccessedDate', today);
+                }
+                
+                // Mulai notifikasi saat aplikasi dimuat jika izin sudah diberikan
+                this.mintaIzinNotifikasi();
+            }
+        });
+
+        app.mount('#app');
+    </script>
+</body>
+</html>
