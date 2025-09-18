@@ -38,6 +38,21 @@
             {{ pesanNotifikasi }}
         </div>
 
+                <!-- Notifikasi Status -->
+        <div v-if="!isNotifikasiDiaktifkan" class="text-center text-red-500 text-sm mb-4">
+            <p>Notifikasi belum diaktifkan. Silakan klik tombol di bawah.</p>
+        </div>
+        <div v-else class="text-center text-green-500 text-sm mb-4">
+            <p>Notifikasi aktif. Anda akan diingatkan setiap jam jika target belum tercapai.</p>
+        </div>
+        
+        <!-- Tombol Aksi -->
+        <button @click="mintaIzinNotifikasi" :disabled="isNotifikasiDiaktifkan"
+        class="w-full bg-gradient-blue text-white font-semibold py-3 px-4 rounded-xl hover:scale-105 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:shadow-xl">
+        Aktifkan Notifikasi
+    </button>
+    <br> <br>
+
         <!-- Input Nama Pengguna -->
         <div class="mb-4">
             <label for="userName" class="block text-sm font-semibold text-gray-700 mb-1">Nama Anda</label>
@@ -65,28 +80,12 @@
 
         <!-- Input Halaman Awal -->
         <div class="mb-4">
-            <label for="halamanAwal" class="block text-sm font-semibold text-gray-700 mb-1">Halaman Saat Ini</label>
+            <label for="halamanAwal" class="block text-sm font-semibold text-gray-700 mb-1">Halaman Awah Hari Ini</label>
             <input type="number" id="halamanAwal" v-model.number="halamanSaatIni" placeholder="Contoh: 15"
                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 transition duration-200 focus:ring-2">
         </div>
 
-        <!-- Input Capaian Bacaan dengan tombol + dan - -->
-        <div class="mb-6">
-            <label for="halamanCapaian" class="block text-sm font-semibold text-gray-700 mb-1">Sudah Sampai Halaman</label>
-            <div class="flex items-center gap-2 mt-1">
-                <button @click="decrementHalaman"
-                        class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">
-                    -
-                </button>
-                <input type="number" id="halamanCapaian" v-model.number="halamanCapaian" placeholder="Contoh: 25"
-                       class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 text-center transition duration-200 focus:ring-2 font-bold">
-                <button @click="incrementHalaman"
-                        class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">
-                    +
-                </button>
-            </div>
-        </div>
-
+        
         <!-- Detail Target -->
         <div class="bg-gray-50 p-6 rounded-2xl mb-6 shadow-inner border border-gray-100">
             <div class="flex justify-between items-center mb-2">
@@ -105,19 +104,23 @@
             </div>
         </div>
 
-        <!-- Notifikasi Status -->
-        <div v-if="!isNotifikasiDiaktifkan" class="text-center text-red-500 text-sm mb-4">
-            <p>Notifikasi belum diaktifkan. Silakan klik tombol di bawah.</p>
-        </div>
-        <div v-else class="text-center text-green-500 text-sm mb-4">
-            <p>Notifikasi aktif. Anda akan diingatkan setiap jam jika target belum tercapai.</p>
-        </div>
 
-        <!-- Tombol Aksi -->
-        <button @click="mintaIzinNotifikasi" :disabled="isNotifikasiDiaktifkan"
-                class="w-full bg-gradient-blue text-white font-semibold py-3 px-4 rounded-xl hover:scale-105 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:shadow-xl">
-            Aktifkan Notifikasi
-        </button>
+        <!-- Input Capaian Bacaan dengan tombol + dan - -->
+        <div class="mb-6">
+            <label for="halamanCapaian" class="block text-sm font-semibold text-gray-700 mb-1">Sudah Sampai Halaman</label>
+            <div class="flex items-center gap-2 mt-1">
+                <button @click="decrementHalaman"
+                        class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">
+                    -
+                </button>
+                <input type="number" id="halamanCapaian" v-model.number="halamanCapaian" placeholder="Contoh: 25"
+                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 text-center transition duration-200 focus:ring-2 font-bold">
+                <button @click="incrementHalaman"
+                        class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">
+                    +
+                </button>
+            </div>
+        </div>
     </div>
 
     <script type="text/javascript">
