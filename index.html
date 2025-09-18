@@ -38,20 +38,21 @@
             {{ pesanNotifikasi }}
         </div>
 
-                <!-- Notifikasi Status -->
-        <div v-if="!isNotifikasiDiaktifkan" class="text-center text-red-500 text-sm mb-4">
-            <p>Notifikasi belum diaktifkan. Silakan klik tombol di bawah.</p>
+        <!-- Notifikasi Status & Tombol Aksi -->
+        <div v-if="!isNotifikasiDiaktifkan" class="mb-6">
+            <div class="text-center text-red-500 text-sm mb-4">
+                <p>Notifikasi belum diaktifkan. Silakan klik tombol di bawah.</p>
+            </div>
+            <button @click="mintaIzinNotifikasi"
+            class="w-full bg-gradient-blue text-white font-semibold py-3 px-4 rounded-xl hover:scale-105 transition duration-300 transform hover:shadow-xl">
+            Aktifkan Notifikasi
+            </button>
         </div>
         <div v-else class="text-center text-green-500 text-sm mb-4">
             <p>Notifikasi aktif. Anda akan diingatkan setiap jam jika target belum tercapai.</p>
         </div>
         
-        <!-- Tombol Aksi -->
-        <button @click="mintaIzinNotifikasi" :disabled="isNotifikasiDiaktifkan"
-        class="w-full bg-gradient-blue text-white font-semibold py-3 px-4 rounded-xl hover:scale-105 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:shadow-xl">
-        Aktifkan Notifikasi
-    </button>
-    <br> <br>
+        <br>
 
         <!-- Input Nama Pengguna -->
         <div class="mb-4">
