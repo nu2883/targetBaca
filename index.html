@@ -3,22 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pelacak Bacaan Al-Qur'an</title>
+  <title>Target Baca</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue.js CDN -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js')
-    .then((registration) => {
-      console.log('✅ Service Worker terdaftar:', registration);
-    })
-    .catch((error) => {
-      console.error('❌ Pendaftaran Service Worker gagal:', error);
-    });
-}
-</script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -39,7 +28,9 @@ if ('serviceWorker' in navigator) {
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-  <div id="app" class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm mx-auto transform transition-all hover:scale-105 duration-300 relative pb-28 min-h-[90vh] flex flex-col justify-between">
+<div id="app" class="bg-white p-8 rounded-3xl shadow-2xl w-full sm:max-w-sm sm:mx-auto min-h-screen flex flex-col justify-between transition-all duration-300">
+
+
 
     <!-- Ikon Gerigi untuk Membuka Modal -->
     <button @click="openSettingsModal" aria-label="Pengaturan" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 transition transform hover:rotate-90">
@@ -80,16 +71,30 @@ if ('serviceWorker' in navigator) {
                  class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 transition duration-200 focus:ring-2">
         </div>
 
-        <!-- Tombol Notifikasi -->
-        <div class="mb-4 mt-6">
+        <!-- Pengingat Dzikir -->
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Pengingat Dzikir</label>
+          <div class="flex gap-2 items-center">
+            <input type="number" min="1" v-model.number="tempDzikirMenit" class="w-24 rounded-xl border-gray-300 shadow-sm p-2 text-center" />
+            <span class="text-sm text-gray-600">menit</span>
+            <button @click="toggleDzikirTemp"
+                    :class="['ml-auto text-white font-semibold py-2 px-3 rounded-xl transition', tempDzikirEnabled ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600']">
+              {{ tempDzikirEnabled ? 'Matikan' : 'Aktifkan' }}
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Contoh: masukkan 5 untuk menerima pengingat setiap 5 menit.</p>
+        </div>
+
+        <!-- Tombol Notifikasi Bacaan -->
+        <div class="mb-4 mt-4">
           <button @click="toggleNotifikasi"
                   :class="['w-full text-white font-semibold py-3 px-4 rounded-xl transition duration-300 transform', isNotifikasiDiaktifkan ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600']">
-            {{ isNotifikasiDiaktifkan ? 'Matikan Notifikasi' : 'Aktifkan Notifikasi' }}
+            {{ isNotifikasiDiaktifkan ? 'Matikan Notifikasi Bacaan' : 'Aktifkan Notifikasi Bacaan' }}
           </button>
         </div>
 
         <!-- Simpan & Tutup -->
-        <div class="mt-8">
+        <div class="mt-6">
           <button @click="saveAndCloseSettings" class="w-full bg-gradient-blue text-white font-semibold py-3 px-4 rounded-xl hover:scale-105 transition duration-300 transform hover:shadow-xl">
             Simpan & Tutup
           </button>
@@ -99,7 +104,7 @@ if ('serviceWorker' in navigator) {
 
     <div>
       <div class="flex flex-col items-center mb-6">
-        <h1 class="text-3xl font-extrabold text-gray-800 mb-2 tracking-tight">Pelacak Bacaan</h1>
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-2 tracking-tight">Target Baca</h1>
         <p class="text-center text-sm text-gray-500 max-w-xs">Catat kemajuan Anda dan capai target harian.</p>
       </div>
 
@@ -109,12 +114,13 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <!-- Notifikasi Status -->
-      <div v-if="!isNotifikasiDiaktifkan" class="text-center text-red-500 text-sm mb-4">
+      <div v-if="!isNotifikasiDiaktifkan && !isDzikirEnabled" class="text-center text-red-500 text-sm mb-4">
         <p>Notifikasi belum diaktifkan.</p>
       </div>
       <div v-else class="text-center text-green-500 text-sm mb-4">
-        <p>Notifikasi aktif. Anda akan diingatkan setiap jam jika target belum tercapai.</p>
-        <p class="text-xs text-gray-400 mt-1">Notifikasi selanjutnya akan muncul pukul {{ nextNotificationTime }} WIB.</p>
+        <p v-if="isNotifikasiDiaktifkan">Notifikasi bacaan aktif. Anda akan diingatkan setiap jam jika target belum tercapai.</p>
+        <p v-if="isDzikirEnabled" class="mt-1">Pengingat dzikir aktif setiap {{ dzikirMenit }} menit.</p>
+        <p class="text-xs text-gray-400 mt-1">Notifikasi selanjutnya akan muncul pukul {{ nextNotificationTime }} WIB (untuk notifikasi bacaan).</p>
       </div>
 
       <br>
@@ -138,23 +144,27 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
 
-    <!-- Input Sudah Sampai Halaman (Fixed di bagian bawah) -->
-    <div class="fixed-bottom-section fixed bottom-0 left-0 right-0 bg-white p-6 rounded-t-3xl border-t border-gray-200">
-      <label for="halamanCapaian" class="block text-sm font-semibold text-gray-700 mb-1">Sudah Sampai Halaman</label>
-      <div class="flex items-center gap-2 mt-1">
-        <button @click="decrementHalaman" aria-label="Kurangi" class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">-</button>
-        <input id="halamanCapaian" type="number" v-model.number="halamanCapaian" placeholder="Contoh: 25"
-               class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 text-center transition duration-200 focus:ring-2 font-bold">
-        <button @click="incrementHalaman" aria-label="Tambah" class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">+</button>
-      </div>
-    </div>
+<!-- Input Sudah Sampai Halaman (Fixed di bagian bawah) -->
+<div class="fixed-bottom-section fixed bottom-0 left-0 right-0 bg-white p-6 rounded-t-3xl border-t border-gray-200 w-full sm:max-w-md sm:mx-auto">
+  <label for="halamanCapaian" class="block text-sm font-semibold text-gray-700 mb-1">Sudah Sampai Halaman</label>
+  <div class="flex items-center gap-2 mt-1">
+    <button @click="decrementHalaman" aria-label="Kurangi"
+      class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">-</button>
+    
+    <input id="halamanCapaian" type="number" v-model.number="halamanCapaian" placeholder="Contoh: 25"
+      class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 text-center transition duration-200 focus:ring-2 font-bold">
+    
+    <button @click="incrementHalaman" aria-label="Tambah"
+      class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">+</button>
+  </div>
+</div>
+
 
   </div>
 
   <script>
     const app = Vue.createApp({
       data() {
-        // Helper: baca angka dari localStorage dengan fallback yang aman
         const readNumber = (key, fallback) => {
           const raw = localStorage.getItem(key);
           const n = Number(raw);
@@ -166,13 +176,24 @@ if ('serviceWorker' in navigator) {
           halamanSaatIni: readNumber('halamanSaatIni', 1),
           halamanCapaian: readNumber('halamanCapaian', readNumber('halamanSaatIni', 1)),
           targetHarian: readNumber('targetHarian', 20),
+
+          // notifikasi bacaan
           intervalId: null,
           isNotifikasiDiaktifkan: localStorage.getItem('isNotifikasiDiaktifkan') === '1',
+
+          // pengingat dzikir
+          dzikirIntervalId: null,
+          dzikirMenit: readNumber('dzikirMenit', 5),            // current active minutes
+          isDzikirEnabled: localStorage.getItem('isDzikirEnabled') === '1',
+
+          // temp values for modal
           pesanNotifikasi: '',
           showSettingsModal: false,
           tempNamaUser: localStorage.getItem('namaUser') || '',
           tempHalamanSaatIni: readNumber('halamanSaatIni', 1),
           tempTargetHarian: readNumber('targetHarian', 20),
+          tempDzikirMenit: readNumber('dzikirMenit', 5),
+          tempDzikirEnabled: localStorage.getItem('isDzikirEnabled') === '1',
         };
       },
       computed: {
@@ -196,207 +217,236 @@ if ('serviceWorker' in navigator) {
         }
       },
       watch: {
-        // Simpan data ke localStorage setiap kali ada perubahan penting
-        halamanCapaian(newValue) {
-          localStorage.setItem('halamanCapaian', String(newValue));
-          if (this.isTargetTercapai) {
-            this.pesanNotifikasi = 'Selamat! Target bacaan Anda sudah tercapai.';
-          } else {
-            // jangan hapus pesanNotifikasi jika notifikasi manual lain sedang tampil, tapi kosongkan jika sebelumnya adalah pesan target tercapai
-            if (this.pesanNotifikasi.includes('Selamat')) {
-              this.pesanNotifikasi = '';
-            }
-          }
-        },
-        targetHarian(newValue) {
-          localStorage.setItem('targetHarian', String(newValue));
-        },
-        halamanSaatIni(newValue) {
-          localStorage.setItem('halamanSaatIni', String(newValue));
-        },
-        namaUser(newValue) {
-          localStorage.setItem('namaUser', newValue);
-        },
-        isNotifikasiDiaktifkan(newValue) {
-          localStorage.setItem('isNotifikasiDiaktifkan', newValue ? '1' : '0');
-        }
+        halamanCapaian(newValue) { localStorage.setItem('halamanCapaian', String(newValue)); },
+        targetHarian(newValue) { localStorage.setItem('targetHarian', String(newValue)); },
+        halamanSaatIni(newValue) { localStorage.setItem('halamanSaatIni', String(newValue)); },
+        namaUser(newValue) { localStorage.setItem('namaUser', newValue); },
+        isNotifikasiDiaktifkan(newValue) { localStorage.setItem('isNotifikasiDiaktifkan', newValue ? '1' : '0'); },
+        dzikirMenit(newValue) { localStorage.setItem('dzikirMenit', String(newValue)); },
+        isDzikirEnabled(newValue) { localStorage.setItem('isDzikirEnabled', newValue ? '1' : '0'); }
       },
       methods: {
-        incrementHalaman() {
-          this.halamanCapaian = Number(this.halamanCapaian) + 1;
-        },
-        decrementHalaman() {
-          if (Number(this.halamanCapaian) > 1) {
-            this.halamanCapaian = Number(this.halamanCapaian) - 1;
-          }
-        },
+        incrementHalaman() { this.halamanCapaian = Number(this.halamanCapaian) + 1; },
+        decrementHalaman() { if (Number(this.halamanCapaian) > 1) this.halamanCapaian = Number(this.halamanCapaian) - 1; },
         openSettingsModal() {
           this.tempNamaUser = this.namaUser;
           this.tempHalamanSaatIni = this.halamanSaatIni;
           this.tempTargetHarian = this.targetHarian;
+          this.tempDzikirMenit = this.dzikirMenit || 5;
+          this.tempDzikirEnabled = this.isDzikirEnabled;
           this.showSettingsModal = true;
         },
-        closeSettingsModal() {
-          this.showSettingsModal = false;
+        closeSettingsModal() { this.showSettingsModal = false; },
+
+        // tombol toggle sementara di modal (ubah temp state)
+        toggleDzikirTemp() {
+          this.tempDzikirEnabled = !this.tempDzikirEnabled;
         },
+
         saveAndCloseSettings() {
-          // Validasi sederhana: halaman minimal 1, target minimal 1
           this.namaUser = this.tempNamaUser || '';
           this.halamanSaatIni = Math.max(1, Number(this.tempHalamanSaatIni) || 1);
           this.targetHarian = Math.max(1, Number(this.tempTargetHarian) || 1);
 
-          // Simpan ke localStorage (watcher akan menulis juga)
+          // dzikir settings
+          const menit = Math.max(1, Number(this.tempDzikirMenit) || 5);
+          this.dzikirMenit = menit;
+          this.isDzikirEnabled = !!this.tempDzikirEnabled;
+
+          // simpan utama
           localStorage.setItem('namaUser', this.namaUser);
           localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
           localStorage.setItem('targetHarian', String(this.targetHarian));
+          localStorage.setItem('dzikirMenit', String(this.dzikirMenit));
+          localStorage.setItem('isDzikirEnabled', this.isDzikirEnabled ? '1' : '0');
 
-          // Perbarui halaman capaian ke halaman saat ini (mis. saat ganti hari / reset manual)
+          // atur halaman capaian ke halamanSaatIni
           this.halamanCapaian = this.halamanSaatIni;
 
           this.showSettingsModal = false;
 
-          // Jika notifikasi aktif, restart timer agar menghitung dari sekarang
+          // restart notifikasi bacaan jika aktif
           if (this.isNotifikasiDiaktifkan) {
             this.mulaiNotifikasi();
-            this.pesanNotifikasi = 'Notifikasi berjalan dengan pengaturan baru.';
+          }
+
+          // start/stop dzikir sesuai pengaturan baru
+          if (this.isDzikirEnabled) {
+            this.startDzikir();
+            this.pesanNotifikasi = `Pengingat dzikir aktif setiap ${this.dzikirMenit} menit.`;
+          } else {
+            this.stopDzikir();
+            this.pesanNotifikasi = 'Pengingat dzikir dimatikan.';
           }
         },
+
+        // Notifikasi bacaan (sama seperti sebelumnya)
         toggleNotifikasi() {
           if (this.isNotifikasiDiaktifkan) {
-            // Matikan notifikasi
-            if (this.intervalId) {
-              clearInterval(this.intervalId);
-              this.intervalId = null;
-            }
+            if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
             this.isNotifikasiDiaktifkan = false;
             this.pesanNotifikasi = 'Notifikasi telah dimatikan.';
-            console.log("Notifikasi dimatikan.");
-            // coba informasikan ke SW kalau ada
             if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
               navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
             }
           } else {
-            // Aktifkan notifikasi -> minta izin
             this.mintaIzinNotifikasi();
           }
         },
         mintaIzinNotifikasi() {
-          console.log("Meminta izin notifikasi. Status saat ini:", Notification && Notification.permission);
           if (!("Notification" in window)) {
             this.pesanNotifikasi = 'Browser Anda tidak mendukung notifikasi.';
-            console.error("Browser tidak mendukung notifikasi.");
             return;
           }
-
           if (Notification.permission === "granted") {
             this.isNotifikasiDiaktifkan = true;
             this.mulaiNotifikasi();
             this.pesanNotifikasi = 'Notifikasi berhasil diaktifkan!';
-            console.log("Izin sudah diberikan, notifikasi diaktifkan.");
           } else if (Notification.permission !== "denied") {
             Notification.requestPermission().then(permission => {
               if (permission === "granted") {
                 this.isNotifikasiDiaktifkan = true;
                 this.mulaiNotifikasi();
                 this.pesanNotifikasi = 'Notifikasi berhasil diaktifkan!';
-                console.log("Izin notifikasi diberikan.");
               } else {
                 this.isNotifikasiDiaktifkan = false;
                 this.pesanNotifikasi = 'Izin notifikasi ditolak.';
-                console.log("Izin notifikasi ditolak.");
               }
             }).catch(err => {
-              console.error("Gagal meminta izin notifikasi:", err);
               this.pesanNotifikasi = 'Gagal meminta izin notifikasi.';
             });
           } else {
             this.isNotifikasiDiaktifkan = false;
             this.pesanNotifikasi = 'Izin notifikasi telah ditolak. Silakan ubah di pengaturan browser Anda.';
-            console.warn("Izin sudah ditolak, tidak dapat meminta lagi.");
           }
         },
         mulaiNotifikasi() {
-          // bersihkan interval sebelumnya
-          if (this.intervalId) {
-            clearInterval(this.intervalId);
-            this.intervalId = null;
-          }
-
-          // kirim sekarang dan jadwalkan tiap jam
+          if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
           this.kirimNotifikasiKeSW();
-          this.intervalId = setInterval(() => {
-            this.kirimNotifikasiKeSW();
-          }, 1000 * 60 * 60); // setiap 1 jam
+          this.intervalId = setInterval(() => { this.kirimNotifikasiKeSW(); }, 1000 * 60 * 60); // 1 jam
         },
         kirimNotifikasiKeSW() {
-          // jika target sudah tercapai, jangan kirim
-          if (this.isTargetTercapai) {
-            console.log("Target tercapai, tidak mengirim notifikasi.");
-            return;
-          }
+          if (this.isTargetTercapai) return;
           const payload = {
             action: 'showNotification',
             namaUser: this.namaUser,
             kekuranganTarget: this.kekuranganTarget,
-            isTargetTercapai: this.isTargetTercapai
+            isTargetTercapai: this.isTargetTercapai,
+            url: '/'
           };
 
-          // Prioritas: service worker (jika ada) -> registration.showNotification -> fallback Notification API
-          if ('serviceWorker' in navigator) {
-            // jika ada controller aktif, kirim pesan
-            if (navigator.serviceWorker.controller) {
+          // coba postMessage ke controller
+          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            try {
               navigator.serviceWorker.controller.postMessage(payload);
               return;
-            }
-            // jika tidak ada controller tapi ada registration, gunakan registration.showNotification
-            navigator.serviceWorker.getRegistration().then(reg => {
-              if (reg && typeof reg.showNotification === 'function') {
-                const title = "Pengingat Bacaan Al-Qur'an";
-                const namaPengguna = this.namaUser ? this.namaUser + ', ' : '';
-                const body = `${namaPengguna}Anda masih perlu membaca ${this.kekuranganTarget} halaman lagi untuk mencapai target harian.`;
-                reg.showNotification(title, {
-                  body,
-                  icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
-                  badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
-                  vibrate: [200,100,200]
-                }).catch(err => {
-                  console.warn("registration.showNotification gagal:", err);
-                });
-                return;
-              }
-              // fallback: Notification API langsung (jika diizinkan)
-              if (Notification.permission === 'granted') {
-                const namaPengguna = this.namaUser ? this.namaUser + ', ' : '';
-                const body = `${namaPengguna}Anda masih perlu membaca ${this.kekuranganTarget} halaman lagi untuk mencapai target harian.`;
-                try {
-                  new Notification("Pengingat Bacaan Al-Qur'an", {
-                    body,
-                    icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
-                    badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
-                    vibrate: [200,100,200]
-                  });
-                } catch (e) {
-                  console.error("Gagal membuat Notification langsung:", e);
-                }
-              } else {
-                console.log("Tidak bisa menampilkan notifikasi, izin belum diberikan.");
-              }
-            });
-          } else {
-            // Browser tidak mendukung serviceWorker, pakai Notification jika boleh
-            if (Notification.permission === 'granted') {
+            } catch (e) { console.warn('postMessage ke SW gagal:', e); }
+          }
+
+          // fallback: reg.showNotification atau Notification API
+          navigator.serviceWorker.getRegistration().then(reg => {
+            if (reg && typeof reg.showNotification === 'function') {
+              const title = "Pengingat Bacaan Al-Qur'an";
               const namaPengguna = this.namaUser ? this.namaUser + ', ' : '';
               const body = `${namaPengguna}Anda masih perlu membaca ${this.kekuranganTarget} halaman lagi untuk mencapai target harian.`;
-              try {
-                new Notification("Pengingat Bacaan Al-Qur'an", {
-                  body,
-                  icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q'
-                });
-              } catch (e) {
-                console.error("Gagal membuat Notification fallback:", e);
-              }
+              reg.showNotification(title, { body, icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q', badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q', data: { url: payload.url } }).catch(()=>{});
+            } else if (Notification.permission === 'granted') {
+              const namaPengguna = this.namaUser ? this.namaUser + ', ' : '';
+              const body = `${namaPengguna}Anda masih perlu membaca ${this.kekuranganTarget} halaman lagi untuk mencapai target harian.`;
+              try { new Notification("Pengingat Bacaan Al-Qur'an", { body, icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q' }); } catch(e) {}
+            }
+          }).catch(()=>{});
+        },
+
+        // ======================
+        // Pengingat Dzikir
+        // ======================
+        toggleDzikir() {
+          // manual toggle (bisa dipanggil dari UI jika ingin)
+          if (this.isDzikirEnabled) {
+            this.stopDzikir();
+            this.isDzikirEnabled = false;
+            this.pesanNotifikasi = 'Pengingat dzikir dimatikan.';
+          } else {
+            // minta izin notifikasi dulu
+            if (Notification.permission !== 'granted') {
+              Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                  this.isDzikirEnabled = true;
+                  this.startDzikir();
+                  this.pesanNotifikasi = `Pengingat dzikir aktif setiap ${this.dzikirMenit} menit.`;
+                } else {
+                  this.pesanNotifikasi = 'Izin notifikasi ditolak. Tidak dapat mengaktifkan dzikir.';
+                }
+              });
+            } else {
+              this.isDzikirEnabled = true;
+              this.startDzikir();
+              this.pesanNotifikasi = `Pengingat dzikir aktif setiap ${this.dzikirMenit} menit.`;
             }
           }
+        },
+
+        startDzikir() {
+          // hentikan dulu kalau ada
+          this.stopDzikir();
+
+          // kirim langsung pertama kali, lalu jadwalkan
+          this.sendDzikirNotification();
+
+          // set interval (menit -> ms)
+          const ms = Math.max(1, Number(this.dzikirMenit) || 5) * 60 * 1000;
+          this.dzikirIntervalId = setInterval(() => {
+            this.sendDzikirNotification();
+          }, ms);
+        },
+
+        stopDzikir() {
+          if (this.dzikirIntervalId) {
+            clearInterval(this.dzikirIntervalId);
+            this.dzikirIntervalId = null;
+          }
+        },
+
+        // mengirim pesan dzikir (mencoba SW/reg.showNotification/Notification API)
+        sendDzikirNotification() {
+          const namaPengguna = this.namaUser ? this.namaUser + ', ' : '';
+          const body = `${namaPengguna}ingatlah kepada Alloh`;
+
+          // 1) jika ada controller, kirim pesan agar SW menampilkan (jika SW menangani)
+          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            try {
+              navigator.serviceWorker.controller.postMessage({
+                action: 'showNotification',
+                title: 'Pengingat Dzikir',
+                body,
+                url: '/'
+              });
+              return;
+            } catch (e) {
+              console.warn('postMessage ke SW gagal (dzikir):', e);
+            }
+          }
+
+          // 2) fallback: gunakan registration.showNotification jika tersedia
+          navigator.serviceWorker.getRegistration().then(reg => {
+            if (reg && typeof reg.showNotification === 'function') {
+              reg.showNotification('Pengingat Dzikir', {
+                body,
+                icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
+                badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
+                data: { url: '/' }
+              }).catch(err => console.warn('reg.showNotification gagal (dzikir):', err));
+            } else if (Notification.permission === 'granted') {
+              try {
+                new Notification('Pengingat Dzikir', { body, icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q' });
+              } catch (e) { console.warn('Notification API gagal (dzikir):', e); }
+            } else {
+              console.log('Tidak dapat menampilkan notifikasi dzikir: izin belum diberikan.');
+            }
+          }).catch(err => {
+            console.warn('getRegistration error saat dzikir:', err);
+          });
         }
       },
       mounted() {
@@ -408,87 +458,48 @@ if ('serviceWorker' in navigator) {
           localStorage.setItem('lastAccessedDate', today);
         }
 
-        // registrasi service worker berbasis Blob (agar bisa disematkan inline)
-        const swCode = `
-          self.addEventListener('install', (event) => {
-            self.skipWaiting();
-          });
-
-          self.addEventListener('activate', (event) => {
-            event.waitUntil(clients.claim());
-          });
-
-          self.addEventListener('message', (event) => {
-            const { action, namaUser, kekuranganTarget, isTargetTercapai } = event.data || {};
-            if (action === 'showNotification') {
-              if (isTargetTercapai) return;
-              if (!kekuranganTarget || kekuranganTarget <= 0) return;
-
-              const title = "Pengingat Bacaan Al-Qur'an";
-              const namaPengguna = namaUser ? namaUser + ', ' : '';
-              const options = {
-                body: \`\${namaPengguna}Anda masih perlu membaca \${kekuranganTarget} halaman lagi untuk mencapai target harian.\`,
-                icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
-                badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
-                vibrate: [200,100,200]
-              };
-              self.registration.showNotification(title, options).catch(() => {});
-            }
-          });
-
-          self.addEventListener('notificationclick', (event) => {
-            event.notification.close();
-            event.waitUntil(clients.matchAll({ type: 'window' }).then(clientList => {
-              for (const client of clientList) {
-                // fokus pada window kalau ada
-                if ('focus' in client) {
-                  client.focus();
-                  return;
-                }
-              }
-              if (clients.openWindow) {
-                return clients.openWindow('/');
-              }
-            }));
-          });
-        `;
-
-        // register SW
+        // registrasi service worker dari file terpisah (pastikan service-worker.js ada di root)
         if ('serviceWorker' in navigator) {
-          try {
-            const swBlob = new Blob([swCode], { type: 'application/javascript' });
-            const swUrl = URL.createObjectURL(swBlob);
-            navigator.serviceWorker.register(swUrl).then(registration => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
               console.log('Service Worker berhasil didaftarkan. Scope:', registration.scope);
-              // jika izin sudah diberikan, mulai notifikasi jika diinginkan
               if (Notification.permission === 'granted' && this.isNotifikasiDiaktifkan) {
                 this.mulaiNotifikasi();
                 this.pesanNotifikasi = 'Notifikasi aktif dan Service Worker siap.';
               } else if (!this.isNotifikasiDiaktifkan) {
                 this.pesanNotifikasi = 'Notifikasi belum diaktifkan.';
               }
-              // revoke url blob untuk kebersihan memori
-              URL.revokeObjectURL(swUrl);
-            }).catch(err => {
+            })
+            .catch(err => {
               console.error('Pendaftaran Service Worker gagal:', err);
               this.pesanNotifikasi = 'Pendaftaran Service Worker gagal. Notifikasi mungkin terbatas.';
             });
-          } catch (err) {
-            console.error("Gagal membuat/daftarkan Service Worker inline:", err);
-            this.pesanNotifikasi = 'Service Worker inline gagal dibuat.';
-          }
+
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('controllerchange: SW sekarang mengontrol halaman.');
+            if (Notification.permission === 'granted' && this.isNotifikasiDiaktifkan) {
+              this.mulaiNotifikasi();
+            }
+          });
         } else {
           this.pesanNotifikasi = 'Browser Anda tidak mendukung Service Worker.';
         }
 
-        // jika state notifikasi sebelumnya aktif dan izin sudah granted, mulai timer
+        // start dzikir bila sebelumnya aktif dan izin sudah granted
+        if (this.isDzikirEnabled && Notification.permission === 'granted') {
+          this.startDzikir();
+          this.pesanNotifikasi = `Pengingat dzikir aktif setiap ${this.dzikirMenit} menit.`;
+        }
+
+        // jika state notifikasi sebelumnya aktif dan izin sudah granted, mulai timer bacaan
         if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
           this.mulaiNotifikasi();
         }
 
-        // pastikan interval dihapus ketika halaman ditutup
+        // bersihkan interval saat unload
         window.addEventListener('beforeunload', () => {
           if (this.intervalId) clearInterval(this.intervalId);
+          if (this.dzikirIntervalId) clearInterval(this.dzikirIntervalId);
         });
       }
     });
