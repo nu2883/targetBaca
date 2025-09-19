@@ -1,89 +1,178 @@
-// Service Worker — perbaikan kecil & lebih tahan banting
-console.log('Service Worker dimuat.');
+// service-worker.js (improved)
+// Letakkan file ini di root situs (mis. /targetBaca/service-worker.js)
 
-// Install -> aktif segera
+const SW_TAG = '[SW]';
+
+function log(...args) { console.log(SW_TAG, ...args); }
+function warn(...args) { console.warn(SW_TAG, ...args); }
+function err(...args) { console.error(SW_TAG, ...args); }
+
+log('loaded');
+
+/**
+ * Install -> langsung aktifkan versi baru
+ */
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: event install');
+  log('install');
+  // aktif segera
   self.skipWaiting();
 });
 
-// Activate -> klaim klien
+/**
+ * Activate -> klaim clients supaya SW langsung mengontrol halaman yang terbuka
+ */
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: event activate');
+  log('activate');
   event.waitUntil(clients.claim());
 });
 
-// Terima pesan dari halaman utama
+/**
+ * Push -> untuk Web Push (server) — jika nanti pakai push, SW akan menampilkan notifikasi
+ */
+self.addEventListener('push', (event) => {
+  log('push event received');
+  let data = {};
+  try {
+    if (event.data) data = event.data.json();
+  } catch (e) {
+    try { data = { body: event.data && event.data.text() }; } catch(e2) {}
+  }
+
+  const title = data.title || 'Pengingat';
+  const body = data.body || (data.namaUser ? `${data.namaUser}, ingatlah kepada Alloh` : 'Ingatlah kepada Alloh');
+  const url = (data.url || '/');
+  const options = {
+    body,
+    icon: data.icon || 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
+    badge: data.badge || 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
+    data: { url },
+    vibrate: [200,100,200]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+      .then(() => log('push -> showNotification succeeded:', title))
+      .catch(e => err('push -> showNotification failed:', e))
+  );
+});
+
+/**
+ * Message -> menerima postMessage dari halaman
+ * Diharapkan payload minimal: { action: 'showNotification', title?, body?, namaUser?, url? }
+ */
 self.addEventListener('message', (event) => {
   try {
     const data = event.data || {};
-    console.log('Service Worker: menerima pesan dari halaman utama:', data);
-    const { action, namaUser, kekuranganTarget, isTargetTercapai } = data;
+    log('message received:', data);
 
+    const action = data.action || '';
     if (action === 'showNotification') {
-      // safety-guard: jika target tercapai atau kekurangan <= 0, tidak tampilkan
-      if (isTargetTercapai) {
-        console.log('Service Worker: target tercapai — skip notifikasi.');
-        return;
-      }
-      if (!kekuranganTarget || Number(kekuranganTarget) <= 0) {
-        console.log('Service Worker: kekuranganTarget <= 0 — skip notifikasi.');
-        return;
-      }
-
-      const title = "Pengingat Bacaan Al-Qur'an";
-      const namaPengguna = namaUser ? `${namaUser}, ` : '';
+      const title = data.title || "Pengingat Bacaan Al-Qur'an";
+      const body = data.body || (data.namaUser ? `${data.namaUser}, ingatlah kepada Alloh` : 'Ingatlah kepada Alloh');
+      const url = data.url || '/';
       const options = {
-        body: `${namaPengguna}Anda masih perlu membaca ${kekuranganTarget} halaman lagi untuk mencapai target harian.`,
-        icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
-        badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
-        silent: false,
-        vibrate: [200, 100, 200],
-        data: { url: '/' } // simpan data jika ingin membuka URL spesifik saat klik
+        body,
+        icon: data.icon || 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
+        badge: data.badge || 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
+        data: { url },
+        vibrate: [200,100,200]
       };
 
-      // Tampilkan notifikasi (tangkap error agar SW tidak crash)
+      // Gunakan event.waitUntil jika tersedia (kadang tidak pada message)
       try {
-        self.registration.showNotification(title, options);
-      } catch (err) {
-        console.error('Gagal menampilkan notifikasi lewat registration.showNotification:', err);
+        event.waitUntil(
+          self.registration.showNotification(title, options)
+            .then(() => log('message -> showNotification succeeded:', title))
+            .catch(e => err('message -> showNotification failed:', e))
+        );
+      } catch (e) {
+        // fallback jika event.waitUntil tidak didukung pada message event
+        Promise.resolve().then(() => self.registration.showNotification(title, options))
+          .then(() => log('message -> showNotification succeeded (fallback):', title))
+          .catch(e => err('message -> showNotification failed (fallback):', e));
       }
+
+      return;
     }
-  } catch (err) {
-    console.error('Terjadi error pada event.message di SW:', err);
+
+    if (action === 'stopNotifications') {
+      // placeholder: client-side yang mengelola interval harus menghentikan dirinya sendiri
+      log('received stopNotifications');
+      return;
+    }
+
+    log('unknown action:', action);
+  } catch (e) {
+    err('error in message handler:', e);
   }
 });
 
-// Saat notifikasi diklik
+/**
+ * notificationclick -> fokus/open client dan buka url dari notification.data
+ */
 self.addEventListener('notificationclick', (event) => {
-  console.log('Service Worker: Notifikasi diklik.');
+  log('notificationclick', event.notification && event.notification.data);
   event.notification.close();
 
-  // URL tujuan bisa berasal dari event.notification.data, fallback ke '/'
   const targetUrl = (event.notification && event.notification.data && event.notification.data.url) ? event.notification.data.url : '/';
 
-  // Coba fokuskan tab yang sesuai; jika tidak ada, buka tab baru
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // cari client yang url-nya di origin yang sama dan yang mungkin cocok
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+      // coba fokus client yang sama origin
       for (const client of clientList) {
-        // Anda bisa perkuat logika pencocokan (mis. client.url.includes('/app'))
         try {
-          if (client.url && new URL(client.url).origin === self.location.origin) {
+          const clientUrl = client.url || '';
+          if (new URL(clientUrl).origin === self.location.origin) {
             if ('focus' in client) {
+              log('focusing existing client:', clientUrl);
               return client.focus();
             }
           }
         } catch (e) {
-          // jika parsing URL error, lanjutkan ke client berikutnya
-          console.warn('Error ketika memeriksa client.url:', e);
+          // ignore parse errors
         }
       }
-
-      // Jika tidak ada client yang bisa difokuskan, buka tab baru ke targetUrl
+      // jika tidak ada, buka tab baru
       if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
+        const full = (new URL(targetUrl, location.origin)).href;
+        log('opening new window to', full);
+        return clients.openWindow(full);
       }
+    })
+  );
+});
+
+/**
+ * notificationclose -> log (opsional)
+ */
+self.addEventListener('notificationclose', (event) => {
+  log('notificationclose', event.notification && event.notification.data);
+});
+
+/**
+ * (Opsional) fetch handler sederhana — pasang cache-first untuk GET (bisa dikembangkan)
+ * Jika tidak mau interception, hapus event listener ini.
+ */
+self.addEventListener('fetch', (event) => {
+  // Hanya handle GET pada same-origin requests untuk mengurangi dampak
+  if (event.request.method !== 'GET') return;
+  if (!event.request.url.startsWith(self.location.origin)) return;
+
+  // contoh cache-first ringan
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request).then((resp) => {
+        // salin response ke cache runtime (opsional)
+        const cloned = resp.clone();
+        caches.open('runtime-v1').then(cache => {
+          cache.put(event.request, cloned).catch(err => warn('cache put failed:', err));
+        });
+        return resp;
+      }).catch(() => {
+        // fallback sederhana ketika offline (bisa kustom)
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      });
     })
   );
 });
