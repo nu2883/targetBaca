@@ -231,6 +231,9 @@
                     localStorage.setItem('halamanSaatIni', this.halamanSaatIni);
                     localStorage.setItem('targetHarian', this.targetHarian);
                     
+                    // Memperbarui halaman capaian ke nilai halaman awal yang baru disimpan
+                    this.halamanCapaian = this.halamanSaatIni;
+
                     // Tutup modal
                     this.showSettingsModal = false;
 
@@ -318,6 +321,7 @@
                 },
             },
             mounted() {
+                this.tampilkanNotifikasi();
                 // Cek jika hari sudah berganti
                 const lastAccessedDate = localStorage.getItem('lastAccessedDate');
                 const today = new Date().toLocaleDateString();
