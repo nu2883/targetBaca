@@ -52,7 +52,7 @@
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300">
 
 <div id="app" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl w-full sm:max-w-sm sm:mx-auto flex flex-col justify-between transition-all duration-300 min-h-screen">
-  
+    
     <Transition name="fade">
         <div v-if="showSettingsModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
             <div class="bg-white dark:bg-gray-700 p-6 rounded-2xl w-full max-w-sm shadow-2xl">
@@ -69,6 +69,11 @@
                     <div>
                         <label for="tempTargetHarian" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Target Harian (Halaman)</label>
                         <input type="number" id="tempTargetHarian" v-model.number="tempTargetHarian" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white dark:bg-gray-600 dark:text-white p-2" min="1">
+                    </div>
+                    <div>
+                        <label for="tempNotificationTimes" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Jam Notifikasi Bacaan (HH:mm)</label>
+                        <input type="text" id="tempNotificationTimes" v-model="tempNotificationTimes" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white dark:bg-gray-600 dark:text-white p-2" placeholder="Contoh: 12:00, 18:00">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Pisahkan dengan koma. Gunakan format 24 jam.</p>
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Notifikasi Bacaan</span>
@@ -127,7 +132,7 @@
                 </div>
                 <div v-else class="text-center text-green-600 text-sm mb-4">
                     <p>Notifikasi bacaan aktif.</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Pengingat akan muncul setiap jam jika target belum tercapai.</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Pengingat akan muncul pada jam {{ notificationTimes.join(', ') }} jika target belum tercapai.</p>
                 </div>
             </Transition>
 
@@ -201,6 +206,8 @@
                 document.documentElement.classList.remove('dark');
             }
 
+            const savedTimes = JSON.parse(localStorage.getItem('notificationTimes'));
+
             return {
                 namaUser: localStorage.getItem('namaUser') || '',
                 halamanSaatIni: readNumber('halamanSaatIni', 1),
@@ -210,6 +217,9 @@
                 isNotifikasiDiaktifkan: localStorage.getItem('isNotifikasiDiaktifkan') === 'true',
                 isDzikirEnabled: localStorage.getItem('isDzikirEnabled') === 'true',
                 dzikirMenit: readNumber('dzikirMenit', 5),
+                
+                // Variabel baru untuk jam notifikasi
+                notificationTimes: savedTimes || ['12:00', '18:00'],
 
                 darkMode: initialDarkMode,
                 showSettingsModal: false,
@@ -220,6 +230,7 @@
                 tempHalamanSaatIni: readNumber('halamanSaatIni', 1),
                 tempTargetHarian: readNumber('targetHarian', 20),
                 tempDzikirMenit: readNumber('dzikirMenit', 5),
+                tempNotificationTimes: savedTimes ? savedTimes.join(', ') : '12:00, 18:00'
             };
         },
         computed: {
@@ -237,7 +248,7 @@
             rekapMingguan() {
                 const today = new Date();
                 const startOfWeek = new Date(today);
-                startOfWeek.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1)); // Senin s.d. Minggu
+                startOfWeek.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
                 startOfWeek.setHours(0, 0, 0, 0);
 
                 const endOfWeek = new Date(startOfWeek);
@@ -254,35 +265,47 @@
             }
         },
         watch: {
-    halamanCapaian(newValue, oldValue) {
-        if (newValue !== oldValue) {
-            localStorage.setItem('halamanCapaian', String(newValue));
-            this.simpanRiwayat();
-        }
-    },
-    darkMode(newValue) { 
-        localStorage.setItem('darkMode', newValue);
-        document.documentElement.classList.toggle('dark', newValue);
-    },
-    isNotifikasiDiaktifkan(newValue) {
-        localStorage.setItem('isNotifikasiDiaktifkan', newValue);
-        if (newValue) { this.mulaiNotifikasi(); }
-        else { this.stopNotifikasi(); }
-    },
-    isDzikirEnabled(newValue) {
-        localStorage.setItem('isDzikirEnabled', newValue);
-        if (newValue) { this.mulaiDzikir(); }
-        else { this.stopDzikir(); }
-    },
-    // Tambahkan bagian ini di dalam 'watch'
-    kekuranganTarget(newValue) {
-        if (newValue <= 0 && this.isNotifikasiDiaktifkan) {
+            halamanCapaian(newValue, oldValue) {
+                if (newValue !== oldValue) {
+                    localStorage.setItem('halamanCapaian', String(newValue));
+                    this.simpanRiwayat();
+                }
+            },
+            darkMode(newValue) { 
+                localStorage.setItem('darkMode', newValue);
+                document.documentElement.classList.toggle('dark', newValue);
+            },
+            isNotifikasiDiaktifkan(newValue) {
+                localStorage.setItem('isNotifikasiDiaktifkan', newValue);
+                if (newValue) { this.mulaiNotifikasi(); }
+                else { this.stopNotifikasi(); }
+            },
+            isDzikirEnabled(newValue) {
+                localStorage.setItem('isDzikirEnabled', newValue);
+                if (newValue) { this.mulaiDzikir(); }
+                else { this.stopDzikir(); }
+            },
+             kekuranganTarget(newValue, oldValue) {
+        if (newValue <= 0 && oldValue > 0) {
             this.stopNotifikasi();
             console.log("Target harian tercapai, notifikasi dihentikan.");
         }
+        
+        if (navigator.serviceWorker.controller) {
+            // Lakukan hal yang sama untuk pesan updateData
+            const payload = {
+                action: 'updateData',
+                namaUser: this.namaUser,
+                kekuranganTarget: this.kekuranganTarget,
+                halamanCapaian: this.halamanCapaian,
+                targetHarian: this.targetHarian,
+                notificationTimes: [...this.notificationTimes]
+            };
+            navigator.serviceWorker.controller.postMessage(payload);
+        }
     }
-},
-methods: {
+        },
+        methods: {
             incrementHalaman() { this.halamanCapaian++; },
             decrementHalaman() { if (this.halamanCapaian > 1) this.halamanCapaian--; },
             openSettingsModal() {
@@ -290,6 +313,7 @@ methods: {
                 this.tempHalamanSaatIni = this.halamanSaatIni;
                 this.tempTargetHarian = this.targetHarian;
                 this.tempDzikirMenit = this.dzikirMenit;
+                this.tempNotificationTimes = this.notificationTimes.join(', ');
                 this.showSettingsModal = true;
             },
             closeSettingsModal() { this.showSettingsModal = false; },
@@ -299,10 +323,15 @@ methods: {
                 this.targetHarian = Math.max(1, Number(this.tempTargetHarian) || 1);
                 this.dzikirMenit = Math.max(1, Number(this.tempDzikirMenit) || 5);
                 
+                // Perbaiki logika parsing untuk jam notifikasi
+                const newTimes = this.tempNotificationTimes.split(',').map(s => s.trim()).filter(s => s.match(/^\d{1,2}:\d{2}$/));
+                this.notificationTimes = newTimes.length > 0 ? newTimes : ['12:00', '18:00'];
+
                 localStorage.setItem('namaUser', this.namaUser);
                 localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
                 localStorage.setItem('targetHarian', String(this.targetHarian));
                 localStorage.setItem('dzikirMenit', String(this.dzikirMenit));
+                localStorage.setItem('notificationTimes', JSON.stringify(this.notificationTimes));
 
                 if (this.isNotifikasiDiaktifkan) { this.mulaiNotifikasi(); }
                 if (this.isDzikirEnabled) { this.mulaiDzikir(); } else { this.stopDzikir(); }
@@ -359,16 +388,19 @@ methods: {
                 }
             },
             mulaiNotifikasi() {
-                if (navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({
-                        action: 'startNotifications',
-                        namaUser: this.namaUser,
-                        kekuranganTarget: this.kekuranganTarget,
-                        halamanCapaian: this.halamanCapaian,
-                        targetHarian: this.targetHarian
-                    });
-                }
-            },
+        if (navigator.serviceWorker.controller) {
+            // Buat objek payload baru yang bersih dari proxy Vue
+            const payload = {
+                action: 'startNotifications',
+                namaUser: this.namaUser,
+                kekuranganTarget: this.kekuranganTarget,
+                halamanCapaian: this.halamanCapaian,
+                targetHarian: this.targetHarian,
+                notificationTimes: [...this.notificationTimes] // Gunakan spread operator untuk membuat array baru
+            };
+            navigator.serviceWorker.controller.postMessage(payload);
+        }
+    },
             stopNotifikasi() {
                 if (navigator.serviceWorker.controller) {
                     navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
