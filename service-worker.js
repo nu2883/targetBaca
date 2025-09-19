@@ -1,7 +1,6 @@
-// service-worker.js
-
 let dzikirInterval;
 let notifInterval;
+let notificationPayload = {};
 
 // Event saat Service Worker diinstal
 self.addEventListener('install', event => {
@@ -21,10 +20,18 @@ self.addEventListener('message', event => {
     
     switch (action) {
         case 'startNotifications':
-            startNotifications(payload);
+            notificationPayload = payload;
+            startNotifications();
             break;
         case 'stopNotifications':
             stopNotifications();
+            break;
+        case 'updateData':
+            notificationPayload = payload;
+            // Jika notifikasi aktif, perbarui jadwal dengan data baru
+            if (notifInterval) {
+                startNotifications();
+            }
             break;
         case 'startDzikir':
             startDzikir(payload);
@@ -57,24 +64,63 @@ self.addEventListener('notificationclick', event => {
     );
 });
 
-// Fungsi untuk memulai pengingat bacaan
-function startNotifications(payload) {
-    stopNotifications(); // Hentikan notifikasi lama jika ada
-    const checkAndNotify = () => {
-        const progress = payload.halamanCapaian - payload.halamanSaatIni;
-        const isTargetTercapai = progress >= payload.targetHarian;
-        if (!isTargetTercapai) {
-            showReadingNotification(payload);
-        }
-    };
-    checkAndNotify(); // Langsung tampilkan notifikasi pertama
-    notifInterval = setInterval(checkAndNotify, 1000 * 60 * 60); // Notifikasi setiap 1 jam
+// Fungsi untuk memulai pengingat bacaan (tergantung target)
+function startNotifications() {
+    stopNotifications(); 
+    
+    if (notificationPayload.kekuranganTarget <= 0) {
+        console.log("Target sudah tercapai, notifikasi tidak dimulai.");
+        return;
+    }
+
+    const { notificationTimes } = notificationPayload;
+
+    if (!notificationTimes || notificationTimes.length === 0) {
+        console.log("Tidak ada waktu notifikasi yang diatur. Notifikasi tidak dimulai.");
+        return;
+    }
+
+    // Gunakan objek untuk menyimpan timeout agar bisa di-clear nanti
+    notifInterval = {};
+
+    notificationTimes.forEach(time => {
+        const [hours, minutes] = time.split(':').map(Number);
+        
+        const scheduleNotification = () => {
+            const now = new Date();
+            const notificationDate = new Date();
+            notificationDate.setHours(hours, minutes, 0, 0);
+
+            // Jika waktu notifikasi sudah lewat hari ini, jadwalkan untuk besok
+            if (notificationDate.getTime() < now.getTime()) {
+                notificationDate.setDate(notificationDate.getDate() + 1);
+            }
+
+            const delay = notificationDate.getTime() - now.getTime();
+
+            console.log(`Menjadwalkan notifikasi untuk ${time} dalam ${delay}ms`);
+            
+            notifInterval[time] = setTimeout(() => {
+                if (notificationPayload.kekuranganTarget > 0) {
+                    showReadingNotification(notificationPayload);
+                } else {
+                    stopNotifications();
+                }
+                // Jadwalkan notifikasi yang sama untuk hari berikutnya
+                scheduleNotification();
+            }, delay);
+        };
+
+        scheduleNotification();
+    });
 }
 
 // Fungsi untuk menghentikan pengingat bacaan
 function stopNotifications() {
     if (notifInterval) {
-        clearInterval(notifInterval);
+        for (const time in notifInterval) {
+            clearTimeout(notifInterval[time]);
+        }
         notifInterval = null;
     }
 }
@@ -97,9 +143,9 @@ function showReadingNotification(payload) {
 
 // Fungsi untuk memulai pengingat dzikir
 function startDzikir(payload) {
-    stopDzikir(); // Hentikan notifikasi dzikir lama jika ada
+    stopDzikir();
     const ms = Math.max(1, payload.dzikirMenit || 5) * 60 * 1000;
-    showDzikirNotification(payload.namaUser); // Langsung tampilkan notifikasi pertama
+    showDzikirNotification(payload.namaUser);
     dzikirInterval = setInterval(() => {
         showDzikirNotification(payload.namaUser);
     }, ms);
