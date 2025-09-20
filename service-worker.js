@@ -1,4 +1,4 @@
-// service-worker.js - Kode yang telah dioptimalkan untuk GitHub Pages
+// service-worker.js - Kode yang telah dioptimalkan
 
 const SW_TAG = '[SW]';
 
@@ -14,7 +14,8 @@ function err(...args) {
 
 // Variabel untuk menyimpan data notifikasi (sementara saat SW aktif)
 let notificationPayload = {};
-let dzikirIntervalId = null;
+// Gunakan TimeoutId untuk penjadwalan yang lebih andal
+let dzikirTimeoutId = null;
 
 log('loaded');
 
@@ -36,7 +37,7 @@ self.addEventListener('activate', (event) => {
 
 /**
  * Message -> Menerima postMessage dari halaman web
- * Diharapkan payload minimal: { action: 'showNotification', title?, body?, namaUser?, url?, kekuranganTarget?, dzikirMenit? }
+ * Diharapkan payload minimal: { action, ...data }
  */
 self.addEventListener('message', (event) => {
     try {
@@ -45,11 +46,17 @@ self.addEventListener('message', (event) => {
 
         const action = data.action || '';
         
-        // Simpan data payload terbaru
+        // Perbarui payload dengan data terbaru dari halaman
         notificationPayload = { ...data };
 
-        if (action === 'showReadingNotification') {
-            showReadingNotification();
+        if (action === 'startNotifications') {
+            // Logika untuk notifikasi harian akan ada di sini
+            log('Menerima perintah startNotifications, akan dijalankan saat idle.');
+        } else if (action === 'stopNotifications') {
+            log('Menerima perintah stopNotifications.');
+        } else if (action === 'updateData') {
+            // Update data notifikasi tanpa menjalankan aksi
+            log('Menerima perintah updateData.');
         } else if (action === 'startDzikir') {
             startDzikir();
         } else if (action === 'stopDzikir') {
@@ -103,74 +110,70 @@ self.addEventListener('notificationclose', (event) => {
 });
 
 /**
- * Fungsi untuk menampilkan notifikasi bacaan.
- * Data diambil dari variabel global `notificationPayload` yang diperbarui oleh `message` event.
- */
-function showReadingNotification() {
-    const { namaUser, kekuranganTarget } = notificationPayload;
-
-    const title = "Pengingat Bacaan Al-Qur'an";
-    const namaPengguna = namaUser ? `${namaUser}, ` : '';
-    const body = kekuranganTarget ?
-        `${namaPengguna}Anda masih perlu membaca ${kekuranganTarget} halaman lagi untuk mencapai target harian.` :
-        `${namaPengguna}Saatnya kembali membaca Al-Qur'an.`;
-
-    const options = {
-        body,
-        icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
-        badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
-        data: { url: notificationPayload.url || '/' },
-        vibrate: [200, 100, 200]
-    };
-
-    self.registration.showNotification(title, options)
-        .then(() => log('showReadingNotification succeeded:', title))
-        .catch(e => err('showReadingNotification failed:', e));
-}
-
-/**
  * Fungsi untuk memulai pengingat dzikir
- * Menggunakan setInterval, jadi hanya akan berfungsi saat halaman aktif.
  */
 function startDzikir() {
+    // Hentikan notifikasi dzikir yang sedang berjalan jika ada
     stopDzikir();
-    const ms = Math.max(1, notificationPayload.dzikirMenit || 5) * 60 * 1000;
-    showDzikirNotification();
-    dzikirIntervalId = setInterval(() => {
-        showDzikirNotification();
-    }, ms);
-    log(`Pengingat dzikir dimulai setiap ${ms / 60000} menit.`);
+    // Panggil fungsi penjadwal pertama kali
+    scheduleDzikirNotification(true);
+    log('Pengingat dzikir berhasil dijadwalkan.');
 }
 
 /**
  * Fungsi untuk menghentikan pengingat dzikir
  */
 function stopDzikir() {
-    if (dzikirIntervalId) {
-        clearInterval(dzikirIntervalId);
-        dzikirIntervalId = null;
+    if (dzikirTimeoutId) {
+        clearTimeout(dzikirTimeoutId);
+        dzikirTimeoutId = null;
         log('Pengingat dzikir dihentikan.');
     }
 }
 
 /**
- * Fungsi untuk menampilkan notifikasi dzikir
+ * Fungsi untuk menampilkan dan menjadwalkan ulang notifikasi dzikir
  */
-function showDzikirNotification() {
-    const { namaUser } = notificationPayload;
-    const title = 'Pengingat Dzikir';
-    const namaPengguna = namaUser ? `${namaUser}, ` : '';
-    const body = `${namaPengguna}ingatlah kepada Alloh`;
+async function scheduleDzikirNotification(isFirstRun = false) {
+    const { namaUser, dzikirMenit } = notificationPayload;
 
-    const options = {
-        body,
-        icon: 'https://placehold.co/192x192/000000/FFFFFF?text=Q',
-        badge: 'https://placehold.co/72x72/000000/FFFFFF?text=Q',
-        data: { url: notificationPayload.url || '/' },
-        vibrate: [200, 100, 200]
-    };
+    // Pastikan data yang diperlukan ada
+    if (!dzikirMenit || dzikirMenit <= 0) {
+        warn('Interval dzikir tidak valid, membatalkan penjadwalan.');
+        return;
+    }
 
-    self.registration.showNotification(title, options)
-        .then(() => log('showDzikirNotification succeeded:', title))
-        .catch(e => err('showDzikirNotification failed:', e));
+    // Hanya tampilkan notifikasi jika ini bukan panggilan pertama
+    if (!isFirstRun) {
+        try {
+            const title = 'Pengingat Dzikir';
+            const namaPengguna = namaUser ? `${namaUser}, ` : '';
+            const body = `${namaPengguna}ayo berdzikir.`;
+
+            const options = {
+                body,
+                icon: '/path/to/your/icon.png', // <-- GANTI DENGAN PATH ICON ANDA
+                badge: '/path/to/your/badge.png', // <-- GANTI DENGAN PATH BADGE ANDA
+                data: { url: notificationPayload.url || '/' },
+                vibrate: [200, 100, 200],
+                tag: 'dzikir-notification'
+            };
+
+            await self.registration.showNotification(title, options);
+            log(`Notifikasi dzikir berhasil ditampilkan.`);
+        } catch (e) {
+            err('Gagal menampilkan notifikasi dzikir:', e);
+            // Jangan menjadwalkan ulang jika terjadi kegagalan
+            return;
+        }
+    }
+
+    // Hitung waktu penundaan dalam milidetik
+    const ms = Math.max(1, dzikirMenit) * 60 * 1000;
+    log(`Menjadwalkan notifikasi berikutnya dalam ${dzikirMenit} menit.`);
+
+    // Atur timer untuk notifikasi berikutnya
+    dzikirTimeoutId = setTimeout(() => {
+        scheduleDzikirNotification();
+    }, ms);
 }
