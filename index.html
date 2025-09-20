@@ -189,336 +189,517 @@
 </div>
 
 <script>
-    const app = Vue.createApp({
-        data() {
-            const readNumber = (key, fallback) => {
-                const raw = localStorage.getItem(key);
-                const n = Number(raw);
-                return Number.isFinite(n) && !Number.isNaN(n) ? n : fallback;
-            };
-            const savedDarkMode = localStorage.getItem('darkMode');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const initialDarkMode = savedDarkMode !== null ? savedDarkMode === 'true' : systemPrefersDark;
-            
-            if (initialDarkMode) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
+/* =========================
+   Helper & Service Worker
+   ========================= */
+function log(...args) { console.log('[APP]', ...args); }
+function warn(...args) { console.warn('[APP]', ...args); }
+function err(...args) { console.error('[APP]', ...args); }
+
+// konversi base64 VAPID -> Uint8Array (jika butuh nanti)
+// function urlBase64ToUint8Array(base64String) { ... }
+
+function nextTimeFromHHmm(hhmm) {
+  const [h, m] = hhmm.split(':').map(s => Number(s));
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+  if (d <= now) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+async function registerServiceWorkerForRepo() {
+  if (!('serviceWorker' in navigator)) {
+    warn('Service Worker tidak didukung.');
+    return null;
+  }
+  try {
+    // Tentukan base path: jika hosting di /targetBaca/ maka scope mesti /targetBaca/
+    // Kita ambil dari location.pathname: ambil bagian sampai folder terakhir sebelum file
+    // Contoh: https://nu2883.github.io/targetBaca/ -> base '/targetBaca/'
+    let base = location.pathname;
+    // Jika URL adalah /targetBaca/ atau /targetBaca/index.html -> kita ingin '/targetBaca/'
+    if (!base.endsWith('/')) {
+      base = base.substring(0, base.lastIndexOf('/') + 1);
+    }
+    const swUrl = base + 'service-worker.js';
+    const reg = await navigator.serviceWorker.register(swUrl, { scope: base });
+    log('Service Worker registered:', swUrl, 'scope:', base);
+
+    // simpan reg global untuk dipakai
+    window._sw_registration = reg;
+
+    // tunggu aktif
+    if (reg.installing) {
+      reg.installing.addEventListener('statechange', () => {
+        if (reg.active) initAfterSWReady(reg);
+      });
+    } else if (reg.active) {
+      initAfterSWReady(reg);
+    }
+    return reg;
+  } catch (e) {
+    err('registerServiceWorkerForRepo error', e);
+    return null;
+  }
+}
+
+function initAfterSWReady(reg) {
+  window._sw_registration = reg;
+  // kirim update data awal jika controller ada
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ action: 'updateData', timestamp: Date.now() });
+  }
+}
+
+/* =========================
+   Notification / Scheduler
+   ========================= */
+
+let _notifTimerId = null;
+let _dzikirTimerId = null;
+
+async function ensureNotificationPermission() {
+  if (!('Notification' in window)) {
+    alert('Browser Anda tidak mendukung notifikasi.');
+    return false;
+  }
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') {
+    alert('Izin notifikasi ditolak. Ubah di pengaturan browser.');
+    return false;
+  }
+  const p = await Notification.requestPermission();
+  return p === 'granted';
+}
+
+async function showNotificationNow({ title = 'Notifikasi', body = '', url = '/', icon = '/targetBaca/icon.png', tag } = {}) {
+  try {
+    const reg = window._sw_registration || await navigator.serviceWorker.getRegistration();
+    if (reg && typeof reg.showNotification === 'function') {
+      reg.showNotification(title, {
+        body,
+        icon,
+        badge: icon,
+        data: { url },
+        tag: tag || undefined
+      });
+    } else if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon, data: { url }, tag: tag || undefined });
+    } else {
+      warn('Tidak punya permission untuk menampilkan notifikasi sekarang.');
+    }
+  } catch (e) {
+    err('showNotificationNow error', e);
+  }
+}
+
+function scheduleNextNotification(notificationTimes = ['09:00','12:00','18:00'], checkTargetFn = () => true) {
+  // batalkan timer sebelumnya
+  if (_notifTimerId) { clearTimeout(_notifTimerId); _notifTimerId = null; }
+
+  // cari waktu terdekat dari daftar times
+  const now = new Date();
+  let nearest = null;
+  for (const t of notificationTimes) {
+    const d = nextTimeFromHHmm(t);
+    if (!nearest || d < nearest) nearest = d;
+  }
+  if (!nearest) return;
+  const ms = nearest.getTime() - now.getTime();
+  log('Menjadwalkan notifikasi berikutnya pada', nearest.toString(), `(${Math.round(ms/1000)}s)`);
+
+  _notifTimerId = setTimeout(async () => {
+    try {
+      if (typeof checkTargetFn === 'function' && !checkTargetFn()) {
+        log('Kondisi target terpenuhi -> melewatkan notifikasi ini.');
+      } else {
+        const nama = localStorage.getItem('namaUser') || '';
+        const body = nama ? `${nama}, ayo lanjut bacaan.` : 'Waktunya melanjutkan bacaan.';
+        await showNotificationNow({ title: 'Pengingat Bacaan', body, url: '/', icon: '/targetBaca/icon.png', tag: 'reading-notif' });
+      }
+    } catch (e) {
+      err('Error saat show scheduled notification', e);
+    } finally {
+      // jadwalkan lagi untuk waktu terdekat berikutnya
+      scheduleNextNotification(notificationTimes, checkTargetFn);
+    }
+  }, ms);
+}
+
+function startDzikirInterval(minutes = 5) {
+  stopDzikirInterval();
+  if (!minutes || minutes <= 0) return;
+  // tampilkan segera sekali (opsional) lalu interval
+  (async () => {
+    const nama = localStorage.getItem('namaUser') || '';
+    const body = nama ? `${nama}, ayo berdzikir.` : 'Ayo berdzikir.';
+    await showNotificationNow({ title: 'Pengingat Dzikir', body, icon: '/targetBaca/icon.png', tag: 'dzikir-notif' });
+  })();
+
+  _dzikirTimerId = setInterval(async () => {
+    try {
+      const nama = localStorage.getItem('namaUser') || '';
+      const body = nama ? `${nama}, ayo berdzikir.` : 'Ayo berdzikir.';
+      await showNotificationNow({ title: 'Pengingat Dzikir', body, icon: '/targetBaca/icon.png', tag: 'dzikir-notif' });
+    } catch (e) {
+      err('dzikir interval error', e);
+    }
+  }, minutes * 60 * 1000);
+}
+
+function stopDzikirInterval() {
+  if (_dzikirTimerId) {
+    clearInterval(_dzikirTimerId);
+    _dzikirTimerId = null;
+  }
+}
+
+function stopScheduledNotifications() {
+  if (_notifTimerId) { clearTimeout(_notifTimerId); _notifTimerId = null; }
+}
+
+/* =========================
+   Vue App (lengkap)
+   ========================= */
+
+const app = Vue.createApp({
+  data() {
+    const readNumber = (key, fallback) => {
+      const raw = localStorage.getItem(key);
+      const n = Number(raw);
+      return Number.isFinite(n) && !Number.isNaN(n) ? n : fallback;
+    };
+    const savedDarkMode = localStorage.getItem('darkMode');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialDarkMode = savedDarkMode !== null ? savedDarkMode === 'true' : systemPrefersDark;
+    if (initialDarkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+
+    const savedTimes = JSON.parse(localStorage.getItem('notificationTimes') || 'null');
+
+    return {
+      namaUser: localStorage.getItem('namaUser') || '',
+      halamanSaatIni: readNumber('halamanSaatIni', 1),
+      halamanCapaian: readNumber('halamanCapaian', readNumber('halamanSaatIni', 1)),
+      targetHarian: readNumber('targetHarian', 20),
+
+      isNotifikasiDiaktifkan: localStorage.getItem('isNotifikasiDiaktifkan') === 'true',
+      isDzikirEnabled: localStorage.getItem('isDzikirEnabled') === 'true',
+      dzikirMenit: readNumber('dzikirMenit', 5),
+
+      notificationTimes: savedTimes || ['09:00', '12:00', '18:00'],
+
+      darkMode: initialDarkMode,
+      showSettingsModal: false,
+      riwayatBacaan: JSON.parse(localStorage.getItem('riwayatBacaan') || '[]'),
+      showAllHistory: false,
+
+      tempNamaUser: localStorage.getItem('namaUser') || '',
+      tempHalamanSaatIni: readNumber('halamanSaatIni', 1),
+      tempTargetHarian: readNumber('targetHarian', 20),
+      tempDzikirMenit: readNumber('dzikirMenit', 5),
+      tempNotificationTimes: savedTimes ? savedTimes.join(', ') : '09:00, 12:00, 18:00'
+    };
+  },
+  computed: {
+    kekuranganTarget() {
+      const kekurangan = this.targetHarian - (this.halamanCapaian - this.halamanSaatIni);
+      return Math.max(0, kekurangan);
+    },
+    targetTotalHalaman() {
+      return this.halamanSaatIni + this.targetHarian;
+    },
+    progressPercentage() {
+      const progress = this.halamanCapaian - this.halamanSaatIni;
+      return Math.min((progress / this.targetHarian) * 100, 100);
+    },
+    rekapMingguan() {
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      return this.riwayatBacaan.reduce((total, hari) => {
+        const tanggalRiwayat = new Date(hari.tanggal);
+        if (tanggalRiwayat >= startOfWeek && tanggalRiwayat <= endOfWeek) {
+          return total + hari.jumlah;
+        }
+        return total;
+      }, 0);
+    }
+  },
+  watch: {
+    halamanCapaian(newValue, oldValue) {
+      if (newValue !== oldValue) {
+        localStorage.setItem('halamanCapaian', String(newValue));
+        this.simpanRiwayat();
+        // update scheduler condition
+        if (this.isNotifikasiDiaktifkan) {
+          // reschedule to respect updated kekuranganTarget
+          scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+        }
+      }
+    },
+    darkMode(newValue) {
+      localStorage.setItem('darkMode', newValue);
+      document.documentElement.classList.toggle('dark', newValue);
+    },
+    isNotifikasiDiaktifkan(newValue) {
+      localStorage.setItem('isNotifikasiDiaktifkan', newValue);
+      if (newValue) {
+        (async () => {
+          if (await ensureNotificationPermission()) {
+            scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+            // kirim data ke SW
+            if (navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({
+                action: 'updateData',
+                namaUser: this.namaUser,
+                notificationTimes: [...this.notificationTimes],
+                halamanCapaian: this.halamanCapaian,
+                targetHarian: this.targetHarian
+              });
             }
-
-            const savedTimes = JSON.parse(localStorage.getItem('notificationTimes'));
-
-            return {
-                namaUser: localStorage.getItem('namaUser') || '',
-                halamanSaatIni: readNumber('halamanSaatIni', 1),
-                halamanCapaian: readNumber('halamanCapaian', readNumber('halamanSaatIni', 1)),
-                targetHarian: readNumber('targetHarian', 20),
-                
-                isNotifikasiDiaktifkan: localStorage.getItem('isNotifikasiDiaktifkan') === 'true',
-                isDzikirEnabled: localStorage.getItem('isDzikirEnabled') === 'true',
-                dzikirMenit: readNumber('dzikirMenit', 5),
-                
-                // Variabel baru untuk jam notifikasi
-                notificationTimes: savedTimes || ['09:00', '12:00', '18:00'],
-
-                darkMode: initialDarkMode,
-                showSettingsModal: false,
-                riwayatBacaan: JSON.parse(localStorage.getItem('riwayatBacaan') || '[]'),
-                showAllHistory: false,
-
-                tempNamaUser: localStorage.getItem('namaUser') || '',
-                tempHalamanSaatIni: readNumber('halamanSaatIni', 1),
-                tempTargetHarian: readNumber('targetHarian', 20),
-                tempDzikirMenit: readNumber('dzikirMenit', 5),
-                tempNotificationTimes: savedTimes ? savedTimes.join(', ') : '09:00, 12:00, 18:00'
-            };
-        },
-        computed: {
-            kekuranganTarget() {
-                const kekurangan = this.targetHarian - (this.halamanCapaian - this.halamanSaatIni);
-                return Math.max(0, kekurangan);
-            },
-            targetTotalHalaman() {
-                return this.halamanSaatIni + this.targetHarian;
-            },
-            progressPercentage() {
-                const progress = this.halamanCapaian - this.halamanSaatIni;
-                return Math.min((progress / this.targetHarian) * 100, 100);
-            },
-            rekapMingguan() {
-                const today = new Date();
-                const startOfWeek = new Date(today);
-                startOfWeek.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
-                startOfWeek.setHours(0, 0, 0, 0);
-
-                const endOfWeek = new Date(startOfWeek);
-                endOfWeek.setDate(startOfWeek.getDate() + 6);
-                endOfWeek.setHours(23, 59, 59, 999);
-
-                return this.riwayatBacaan.reduce((total, hari) => {
-                    const tanggalRiwayat = new Date(hari.tanggal);
-                    if (tanggalRiwayat >= startOfWeek && tanggalRiwayat <= endOfWeek) {
-                        return total + hari.jumlah;
-                    }
-                    return total;
-                }, 0);
+          } else {
+            this.isNotifikasiDiaktifkan = false;
+          }
+        })();
+      } else {
+        stopScheduledNotifications();
+        // send stop message to SW (optional)
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
+        }
+      }
+    },
+    isDzikirEnabled(newValue) {
+      localStorage.setItem('isDzikirEnabled', newValue);
+      if (newValue) {
+        (async () => {
+          if (await ensureNotificationPermission()) {
+            startDzikirInterval(this.dzikirMenit);
+            if (navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ action: 'updateData', isDzikirEnabled: true, dzikirMenit: this.dzikirMenit });
             }
-        },
-        watch: {
-            halamanCapaian(newValue, oldValue) {
-                if (newValue !== oldValue) {
-                    localStorage.setItem('halamanCapaian', String(newValue));
-                    this.simpanRiwayat();
-                }
-            },
-            darkMode(newValue) { 
-                localStorage.setItem('darkMode', newValue);
-                document.documentElement.classList.toggle('dark', newValue);
-            },
-            isNotifikasiDiaktifkan(newValue) {
-                localStorage.setItem('isNotifikasiDiaktifkan', newValue);
-                if (newValue) { this.mulaiNotifikasi(); }
-                else { this.stopNotifikasi(); }
-            },
-            isDzikirEnabled(newValue) {
-                localStorage.setItem('isDzikirEnabled', newValue);
-                if (newValue) { this.mulaiDzikir(); }
-                else { this.stopDzikir(); }
-            },
-            kekuranganTarget(newValue, oldValue) {
-                // Hentikan notifikasi jika target tercapai
-                if (newValue <= 0 && oldValue > 0) {
-                    this.stopNotifikasi();
-                    console.log("Target harian tercapai, notifikasi dihentikan.");
-                }
-                
-                // Kirim pesan ke service worker untuk update data
-                if (navigator.serviceWorker.controller) {
-                    const payload = {
-                        action: 'updateData',
-                        namaUser: this.namaUser,
-                        kekuranganTarget: this.kekuranganTarget,
-                        halamanCapaian: this.halamanCapaian,
-                        targetHarian: this.targetHarian,
-                        notificationTimes: [...this.notificationTimes]
-                    };
-                    navigator.serviceWorker.controller.postMessage(payload);
-                }
-            }
-        },
-        methods: {
-            initNotifications() {
-                if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
-                    // Beri jeda 1 detik agar service worker benar-benar siap
-                    setTimeout(() => {
-                        this.mulaiNotifikasi();
-                    }, 1000);
-                }
-                if (this.isDzikirEnabled && Notification.permission === 'granted') {
-                    setTimeout(() => {
-                        this.mulaiDzikir();
-                    }, 1000);
-                }
-            },
-            incrementHalaman() { this.halamanCapaian++; },
-            decrementHalaman() { if (this.halamanCapaian > 1) this.halamanCapaian--; },
-            openSettingsModal() {
-                this.tempNamaUser = this.namaUser;
-                this.tempHalamanSaatIni = this.halamanSaatIni;
-                this.tempTargetHarian = this.targetHarian;
-                this.tempDzikirMenit = this.dzikirMenit;
-                this.tempNotificationTimes = this.notificationTimes.join(', ');
-                this.showSettingsModal = true;
-            },
-            closeSettingsModal() { this.showSettingsModal = false; },
-            saveAndCloseSettings() {
-                this.namaUser = this.tempNamaUser || '';
-                this.halamanSaatIni = Math.max(1, Number(this.tempHalamanSaatIni) || 1);
-                this.targetHarian = Math.max(1, Number(this.tempTargetHarian) || 1);
-                this.dzikirMenit = Math.max(1, Number(this.tempDzikirMenit) || 5);
-                
-                // Perbaiki logika parsing untuk jam notifikasi
-                const newTimes = this.tempNotificationTimes.split(',').map(s => s.trim()).filter(s => s.match(/^\d{1,2}:\d{2}$/));
-                this.notificationTimes = newTimes.length > 0 ? newTimes : ['09:00', '12:00', '18:00'];
+          } else {
+            this.isDzikirEnabled = false;
+          }
+        })();
+      } else {
+        stopDzikirInterval();
+        if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ action: 'updateData', isDzikirEnabled: false });
+      }
+    },
+    kekuranganTarget(newValue, oldValue) {
+      if (newValue <= 0 && oldValue > 0) {
+        // target tercapai -> hentikan notifikasi jadwal
+        stopScheduledNotifications();
+        console.log("Target harian tercapai, notifikasi dihentikan.");
+      }
+      // kirim updateData ke SW agar SW punya snapshot terbaru (jika mau)
+      if (navigator.serviceWorker.controller) {
+        const payload = {
+          action: 'updateData',
+          namaUser: this.namaUser,
+          kekuranganTarget: this.kekuranganTarget,
+          halamanCapaian: this.halamanCapaian,
+          targetHarian: this.targetHarian,
+          notificationTimes: [...this.notificationTimes]
+        };
+        navigator.serviceWorker.controller.postMessage(payload);
+      }
+    }
+  },
+  methods: {
+    initNotifications() {
+      // dipanggil setelah SW siap
+      if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
+        scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+      }
+      if (this.isDzikirEnabled && Notification.permission === 'granted') {
+        startDzikirInterval(this.dzikirMenit);
+      }
+    },
+    incrementHalaman() { this.halamanCapaian++; },
+    decrementHalaman() { if (this.halamanCapaian > 1) this.halamanCapaian--; },
+    openSettingsModal() {
+      this.tempNamaUser = this.namaUser;
+      this.tempHalamanSaatIni = this.halamanSaatIni;
+      this.tempTargetHarian = this.targetHarian;
+      this.tempDzikirMenit = this.dzikirMenit;
+      this.tempNotificationTimes = this.notificationTimes.join(', ');
+      this.showSettingsModal = true;
+    },
+    closeSettingsModal() { this.showSettingsModal = false; },
+    saveAndCloseSettings() {
+      this.namaUser = this.tempNamaUser || '';
+      this.halamanSaatIni = Math.max(1, Number(this.tempHalamanSaatIni) || 1);
+      this.targetHarian = Math.max(1, Number(this.tempTargetHarian) || 1);
+      this.dzikirMenit = Math.max(1, Number(this.tempDzikirMenit) || 5);
 
-                localStorage.setItem('namaUser', this.namaUser);
-                localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
-                localStorage.setItem('targetHarian', String(this.targetHarian));
-                localStorage.setItem('dzikirMenit', String(this.dzikirMenit));
-                localStorage.setItem('notificationTimes', JSON.stringify(this.notificationTimes));
+      const newTimes = this.tempNotificationTimes.split(',').map(s => s.trim()).filter(s => s.match(/^\d{1,2}:\d{2}$/));
+      this.notificationTimes = newTimes.length > 0 ? newTimes : ['09:00', '12:00', '18:00'];
 
-                if (this.isNotifikasiDiaktifkan) { this.mulaiNotifikasi(); }
-                if (this.isDzikirEnabled) { this.mulaiDzikir(); } else { this.stopDzikir(); }
-                
-                this.showSettingsModal = false;
-            },
-            toggleDarkMode() { this.darkMode = !this.darkMode; },
-            formatTanggal(tanggalString) {
-                const date = new Date(tanggalString);
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                return `${year}${month}${day}`;
-            },
-            simpanRiwayat() {
-                const today = new Date().toISOString().split('T')[0];
-                const existingIndex = this.riwayatBacaan.findIndex(item => item.tanggal === today);
-                
-                const riwayatHariIni = {
-                    tanggal: today,
-                    dari: this.halamanSaatIni,
-                    sampai: this.halamanCapaian,
-                    jumlah: this.halamanCapaian - this.halamanSaatIni,
-                    target: this.targetHarian,
-                    targetTercapai: (this.halamanCapaian - this.halamanSaatIni) >= this.targetHarian
-                };
-                
-                if (existingIndex >= 0) {
-                    this.riwayatBacaan.splice(existingIndex, 1, riwayatHariIni);
-                } else {
-                    this.riwayatBacaan.unshift(riwayatHariIni);
-                }
-                
-                localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
-            },
-            async toggleNotifikasi() {
-                if (!("Notification" in window)) {
-                    alert('Browser Anda tidak mendukung notifikasi.');
-                    return;
-                }
-                if (Notification.permission === 'denied') {
-                    alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
-                    return;
-                }
-                if (this.isNotifikasiDiaktifkan) {
-                    this.isNotifikasiDiaktifkan = false;
-                } else {
-                    const permission = await Notification.requestPermission();
-                    if (permission === "granted") {
-                        this.isNotifikasiDiaktifkan = true;
-                    } else {
-                        this.isNotifikasiDiaktifkan = false;
-                    }
-                }
-            },
-            mulaiNotifikasi() {
-                if (navigator.serviceWorker.controller) {
-                    // Buat objek payload baru yang bersih dari proxy Vue
-                    const payload = {
-                        action: 'startNotifications',
-                        namaUser: this.namaUser,
-                        kekuranganTarget: this.kekuranganTarget,
-                        halamanCapaian: this.halamanCapaian,
-                        targetHarian: this.targetHarian,
-                        notificationTimes: [...this.notificationTimes] // Gunakan spread operator untuk membuat array baru
-                    };
-                    navigator.serviceWorker.controller.postMessage(payload);
-                }
-            },
-            stopNotifikasi() {
-                if (navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
-                }
-            },
-            async toggleDzikir() {
-                if (!("Notification" in window)) {
-                    alert('Browser Anda tidak mendukung notifikasi.');
-                    return;
-                }
-                if (Notification.permission === 'denied') {
-                    alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
-                    return;
-                }
-                if (this.isDzikirEnabled) {
-                    this.isDzikirEnabled = false;
-                } else {
-                    const permission = await Notification.requestPermission();
-                    if (permission === "granted") {
-                        this.isDzikirEnabled = true;
-                    } else {
-                        this.isDzikirEnabled = false;
-                    }
-                }
-            },
-            mulaiDzikir() {
-                if (navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({
-                        action: 'startDzikir',
-                        dzikirMenit: this.dzikirMenit,
-                        namaUser: this.namaUser
-                    });
-                }
-            },
-            stopDzikir() {
-                if (navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({ action: 'stopDzikir' });
-                }
-            }
-        },
-        mounted() {
-            function localDateKey() {
-                const d = new Date();
-                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            }
+      localStorage.setItem('namaUser', this.namaUser);
+      localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
+      localStorage.setItem('targetHarian', String(this.targetHarian));
+      localStorage.setItem('dzikirMenit', String(this.dzikirMenit));
+      localStorage.setItem('notificationTimes', JSON.stringify(this.notificationTimes));
 
-            const lastAccessedDate = localStorage.getItem('lastAccessedDate');
-            const todayKey = localDateKey();
+      // reschedule jika notifikasi aktif
+      if (this.isNotifikasiDiaktifkan) {
+        scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+      }
+      if (this.isDzikirEnabled) {
+        startDzikirInterval(this.dzikirMenit);
+      } else {
+        stopDzikirInterval();
+      }
 
-            if (lastAccessedDate !== todayKey) {
-                // Hanya jalankan jika bukan hari yang sama
-                const lastCapaian = Number(localStorage.getItem('halamanCapaian')) || this.halamanSaatIni;
-                const halamanAwalHariLalu = Number(localStorage.getItem('halamanSaatIni')) || 1;
-                
-                // Cek apakah ada riwayat bacaan kemarin untuk menghindari duplikasi
-                const riwayatHariLalu = this.riwayatBacaan.find(item => item.tanggal === lastAccessedDate);
+      this.showSettingsModal = false;
+    },
+    toggleDarkMode() { this.darkMode = !this.darkMode; },
+    formatTanggal(tanggalString) {
+      const date = new Date(tanggalString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}${month}${day}`;
+    },
+    simpanRiwayat() {
+      const today = new Date().toISOString().split('T')[0];
+      const existingIndex = this.riwayatBacaan.findIndex(item => item.tanggal === today);
+      const riwayatHariIni = {
+        tanggal: today,
+        dari: this.halamanSaatIni,
+        sampai: this.halamanCapaian,
+        jumlah: this.halamanCapaian - this.halamanSaatIni,
+        target: this.targetHarian,
+        targetTercapai: (this.halamanCapaian - this.halamanSaatIni) >= this.targetHarian
+      };
+      if (existingIndex >= 0) {
+        this.riwayatBacaan.splice(existingIndex, 1, riwayatHariIni);
+      } else {
+        this.riwayatBacaan.unshift(riwayatHariIni);
+      }
+      localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
+    },
+    async toggleNotifikasi() {
+      if (!("Notification" in window)) {
+        alert('Browser Anda tidak mendukung notifikasi.');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
+        return;
+      }
+      if (this.isNotifikasiDiaktifkan) {
+        this.isNotifikasiDiaktifkan = false;
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          this.isNotifikasiDiaktifkan = true;
+        } else {
+          this.isNotifikasiDiaktifkan = false;
+        }
+      }
+    },
+    mulaiNotifikasi() {
+      // dipanggil jika ingin memaksa notifikasi segera (button test)
+      if (this.isNotifikasiDiaktifkan) {
+        showNotificationNow({ title: 'Tes Notifikasi', body: 'Ini notifikasi tes', icon: '/targetBaca/icon.png' });
+      } else {
+        alert('Aktifkan notifikasi terlebih dahulu.');
+      }
+    },
+    stopNotifikasi() {
+      this.isNotifikasiDiaktifkan = false;
+      stopScheduledNotifications();
+      if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
+    },
+    async toggleDzikir() {
+      if (!("Notification" in window)) {
+        alert('Browser Anda tidak mendukung notifikasi.');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
+        return;
+      }
+      if (this.isDzikirEnabled) {
+        this.isDzikirEnabled = false;
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          this.isDzikirEnabled = true;
+        } else {
+          this.isDzikirEnabled = false;
+        }
+      }
+    },
+    mulaiDzikir() {
+      if (this.isDzikirEnabled) startDzikirInterval(this.dzikirMenit);
+    },
+    stopDzikir() {
+      stopDzikirInterval();
+    }
+  },
+  async mounted() {
+    // handle lastAccessedDate logic (copy dari kode Anda)
+    function localDateKey() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    const lastAccessedDate = localStorage.getItem('lastAccessedDate');
+    const todayKey = localDateKey();
 
-                if (lastAccessedDate && !riwayatHariLalu) {
-                    const riwayatKemarin = {
-                        tanggal: lastAccessedDate,
-                        dari: halamanAwalHariLalu,
-                        sampai: lastCapaian,
-                        jumlah: lastCapaian - halamanAwalHariLalu,
-                        target: this.targetHarian,
-                        targetTercapai: (lastCapaian - halamanAwalHariLalu) >= this.targetHarian
-                    };
-                    this.riwayatBacaan.unshift(riwayatKemarin);
-                    localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
-                }
+    if (lastAccessedDate !== todayKey) {
+      const lastCapaian = Number(localStorage.getItem('halamanCapaian')) || this.halamanSaatIni;
+      const halamanAwalHariLalu = Number(localStorage.getItem('halamanSaatIni')) || 1;
+      const riwayatHariLalu = this.riwayatBacaan.find(item => item.tanggal === lastAccessedDate);
+      if (lastAccessedDate && !riwayatHariLalu) {
+        const riwayatKemarin = {
+          tanggal: lastAccessedDate,
+          dari: halamanAwalHariLalu,
+          sampai: lastCapaian,
+          jumlah: lastCapaian - halamanAwalHariLalu,
+          target: this.targetHarian,
+          targetTercapai: (lastCapaian - halamanAwalHariLalu) >= this.targetHarian
+        };
+        this.riwayatBacaan.unshift(riwayatKemarin);
+        localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
+      }
+      this.halamanSaatIni = lastCapaian;
+      this.halamanCapaian = lastCapaian;
+      localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
+      localStorage.setItem('halamanCapaian', String(this.halamanCapaian));
+      localStorage.setItem('lastAccessedDate', todayKey);
+    }
 
-                // Reset progress harian
-                this.halamanSaatIni = lastCapaian;
-                this.halamanCapaian = lastCapaian;
-                localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
-                localStorage.setItem('halamanCapaian', String(this.halamanCapaian));
-                localStorage.setItem('lastAccessedDate', todayKey);
-            }
+    // Registrasi Service Worker (sesuaikan scope otomatis)
+    await registerServiceWorkerForRepo();
 
-            // Pendaftaran Service Worker yang lebih robust
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', async () => {
-                    try {
-                        const registration = await navigator.serviceWorker.register('service-worker.js');
-                        console.log('Service Worker berhasil didaftarkan. Scope:', registration.scope);
-                        
-                        // Tunggu hingga Service Worker aktif
-                        if (registration.installing) {
-                            registration.installing.addEventListener('statechange', () => {
-                                if (registration.active) {
-                                    this.initNotifications();
-                                }
-                            });
-                        } else if (registration.active) {
-                            this.initNotifications();
-                        }
-                    } catch (err) {
-                        console.error('Pendaftaran Service Worker gagal:', err);
-                    }
-                });
-            }
-        },
-    });
+    // Init notifikasi/dzikir jika permission sudah granted dan flag aktif
+    if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
+      scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+    }
+    if (this.isDzikirEnabled && Notification.permission === 'granted') {
+      startDzikirInterval(this.dzikirMenit);
+    }
 
-    app.mount('#app');
+    // listen message dari SW (opsional, untuk debug)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (ev) => {
+        log('msg from SW', ev.data);
+      });
+    }
+  }
+});
+
+app.mount('#app');
 </script>
+
 </body>
 </html>
