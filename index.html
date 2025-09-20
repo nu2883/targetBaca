@@ -219,7 +219,7 @@
                 dzikirMenit: readNumber('dzikirMenit', 5),
                 
                 // Variabel baru untuk jam notifikasi
-                notificationTimes: savedTimes || ['12:00', '18:00'],
+                notificationTimes: savedTimes || ['09:00', '12:00', '18:00'],
 
                 darkMode: initialDarkMode,
                 showSettingsModal: false,
@@ -230,7 +230,7 @@
                 tempHalamanSaatIni: readNumber('halamanSaatIni', 1),
                 tempTargetHarian: readNumber('targetHarian', 20),
                 tempDzikirMenit: readNumber('dzikirMenit', 5),
-                tempNotificationTimes: savedTimes ? savedTimes.join(', ') : '12:00, 18:00'
+                tempNotificationTimes: savedTimes ? savedTimes.join(', ') : '09:00, 12:00, 18:00'
             };
         },
         computed: {
@@ -285,27 +285,41 @@
                 if (newValue) { this.mulaiDzikir(); }
                 else { this.stopDzikir(); }
             },
-             kekuranganTarget(newValue, oldValue) {
-        if (newValue <= 0 && oldValue > 0) {
-            this.stopNotifikasi();
-            console.log("Target harian tercapai, notifikasi dihentikan.");
-        }
-        
-        if (navigator.serviceWorker.controller) {
-            // Lakukan hal yang sama untuk pesan updateData
-            const payload = {
-                action: 'updateData',
-                namaUser: this.namaUser,
-                kekuranganTarget: this.kekuranganTarget,
-                halamanCapaian: this.halamanCapaian,
-                targetHarian: this.targetHarian,
-                notificationTimes: [...this.notificationTimes]
-            };
-            navigator.serviceWorker.controller.postMessage(payload);
-        }
-    }
+            kekuranganTarget(newValue, oldValue) {
+                // Hentikan notifikasi jika target tercapai
+                if (newValue <= 0 && oldValue > 0) {
+                    this.stopNotifikasi();
+                    console.log("Target harian tercapai, notifikasi dihentikan.");
+                }
+                
+                // Kirim pesan ke service worker untuk update data
+                if (navigator.serviceWorker.controller) {
+                    const payload = {
+                        action: 'updateData',
+                        namaUser: this.namaUser,
+                        kekuranganTarget: this.kekuranganTarget,
+                        halamanCapaian: this.halamanCapaian,
+                        targetHarian: this.targetHarian,
+                        notificationTimes: [...this.notificationTimes]
+                    };
+                    navigator.serviceWorker.controller.postMessage(payload);
+                }
+            }
         },
         methods: {
+            initNotifications() {
+                if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
+                    // Beri jeda 1 detik agar service worker benar-benar siap
+                    setTimeout(() => {
+                        this.mulaiNotifikasi();
+                    }, 1000);
+                }
+                if (this.isDzikirEnabled && Notification.permission === 'granted') {
+                    setTimeout(() => {
+                        this.mulaiDzikir();
+                    }, 1000);
+                }
+            },
             incrementHalaman() { this.halamanCapaian++; },
             decrementHalaman() { if (this.halamanCapaian > 1) this.halamanCapaian--; },
             openSettingsModal() {
@@ -388,19 +402,19 @@
                 }
             },
             mulaiNotifikasi() {
-        if (navigator.serviceWorker.controller) {
-            // Buat objek payload baru yang bersih dari proxy Vue
-            const payload = {
-                action: 'startNotifications',
-                namaUser: this.namaUser,
-                kekuranganTarget: this.kekuranganTarget,
-                halamanCapaian: this.halamanCapaian,
-                targetHarian: this.targetHarian,
-                notificationTimes: [...this.notificationTimes] // Gunakan spread operator untuk membuat array baru
-            };
-            navigator.serviceWorker.controller.postMessage(payload);
-        }
-    },
+                if (navigator.serviceWorker.controller) {
+                    // Buat objek payload baru yang bersih dari proxy Vue
+                    const payload = {
+                        action: 'startNotifications',
+                        namaUser: this.namaUser,
+                        kekuranganTarget: this.kekuranganTarget,
+                        halamanCapaian: this.halamanCapaian,
+                        targetHarian: this.targetHarian,
+                        notificationTimes: [...this.notificationTimes] // Gunakan spread operator untuk membuat array baru
+                    };
+                    navigator.serviceWorker.controller.postMessage(payload);
+                }
+            },
             stopNotifikasi() {
                 if (navigator.serviceWorker.controller) {
                     navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
@@ -450,44 +464,58 @@
             const lastAccessedDate = localStorage.getItem('lastAccessedDate');
             const todayKey = localDateKey();
 
-            if (lastAccessedDate !== todayKey && lastAccessedDate) {
+            if (lastAccessedDate !== todayKey) {
+                // Hanya jalankan jika bukan hari yang sama
                 const lastCapaian = Number(localStorage.getItem('halamanCapaian')) || this.halamanSaatIni;
                 const halamanAwalHariLalu = Number(localStorage.getItem('halamanSaatIni')) || 1;
-                const riwayatKemarin = {
-                    tanggal: lastAccessedDate,
-                    dari: halamanAwalHariLalu,
-                    sampai: lastCapaian,
-                    jumlah: lastCapaian - halamanAwalHariLalu,
-                    target: this.targetHarian,
-                    targetTercapai: (lastCapaian - halamanAwalHariLalu) >= this.targetHarian
-                };
-                this.riwayatBacaan.unshift(riwayatKemarin);
+                
+                // Cek apakah ada riwayat bacaan kemarin untuk menghindari duplikasi
+                const riwayatHariLalu = this.riwayatBacaan.find(item => item.tanggal === lastAccessedDate);
+
+                if (lastAccessedDate && !riwayatHariLalu) {
+                    const riwayatKemarin = {
+                        tanggal: lastAccessedDate,
+                        dari: halamanAwalHariLalu,
+                        sampai: lastCapaian,
+                        jumlah: lastCapaian - halamanAwalHariLalu,
+                        target: this.targetHarian,
+                        targetTercapai: (lastCapaian - halamanAwalHariLalu) >= this.targetHarian
+                    };
+                    this.riwayatBacaan.unshift(riwayatKemarin);
+                    localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
+                }
+
+                // Reset progress harian
                 this.halamanSaatIni = lastCapaian;
                 this.halamanCapaian = lastCapaian;
                 localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
                 localStorage.setItem('halamanCapaian', String(this.halamanCapaian));
                 localStorage.setItem('lastAccessedDate', todayKey);
-                localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
-            } else if (!lastAccessedDate) {
-                localStorage.setItem('lastAccessedDate', todayKey);
             }
 
+            // Pendaftaran Service Worker yang lebih robust
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('service-worker.js')
-                    .then(registration => {
+                window.addEventListener('load', async () => {
+                    try {
+                        const registration = await navigator.serviceWorker.register('service-worker.js');
                         console.log('Service Worker berhasil didaftarkan. Scope:', registration.scope);
-                        if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
-                            this.mulaiNotifikasi();
+                        
+                        // Tunggu hingga Service Worker aktif
+                        if (registration.installing) {
+                            registration.installing.addEventListener('statechange', () => {
+                                if (registration.active) {
+                                    this.initNotifications();
+                                }
+                            });
+                        } else if (registration.active) {
+                            this.initNotifications();
                         }
-                        if (this.isDzikirEnabled && Notification.permission === 'granted') {
-                            this.mulaiDzikir();
-                        }
-                    })
-                    .catch(err => {
+                    } catch (err) {
                         console.error('Pendaftaran Service Worker gagal:', err);
-                    });
+                    }
+                });
             }
-        }
+        },
     });
 
     app.mount('#app');
