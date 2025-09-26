@@ -9,10 +9,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="./manifest.json"> 
     <link rel="icon" href="https://placehold.co/192x192/000000/FFFFFF?text=Q" type="image/png">
 
     <script>
+        // Konfigurasi Tailwind untuk Dark Mode
         tailwind.config = {
             darkMode: 'class',
             theme: {
@@ -38,8 +39,13 @@
         .progress-bar {
             transition: width 0.5s ease-in-out;
         }
+        /* Style untuk bagian bawah agar tetap berada di tempatnya dan terlihat bagus */
         .fixed-bottom-section {
             box-shadow: 0 -10px 15px -3px rgba(0,0,0,0.1), 0 -4px 6px -2px rgba(0,0,0,0.05);
+            /* Pastikan lebar fixed section sama dengan lebar app container */
+            max-width: 24rem; /* sm:max-w-sm = 24rem */
+            left: 50%;
+            transform: translateX(-50%);
         }
         .fade-enter-active, .fade-leave-active {
             transition: opacity 0.3s ease;
@@ -47,11 +53,17 @@
         .fade-enter-from, .fade-leave-to {
             opacity: 0;
         }
+        /* Pastikan elemen utama mengambil tinggi penuh pada viewport kecil */
+        #app {
+            min-height: 100vh;
+            /* Tambahkan padding bawah agar konten tidak tertutup fixed-bottom-section */
+            padding-bottom: 120px; /* Sesuaikan jika fixed-bottom-section berubah tinggi */
+        }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300">
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col items-center p-4 transition-colors duration-300">
 
-<div id="app" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl w-full sm:max-w-sm sm:mx-auto flex flex-col justify-between transition-all duration-300 min-h-screen">
+<div id="app" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl w-full sm:max-w-sm transition-all duration-300 relative">
     
     <Transition name="fade">
         <div v-if="showSettingsModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
@@ -63,7 +75,7 @@
                         <input type="text" id="tempNamaUser" v-model="tempNamaUser" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white dark:bg-gray-600 dark:text-white p-2" placeholder="Opsional">
                     </div>
                     <div>
-                        <label for="tempHalamanSaatIni" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Halaman Saat Ini</label>
+                        <label for="tempHalamanSaatIni" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Halaman Saat Ini (Awal Hari)</label>
                         <input type="number" id="tempHalamanSaatIni" v-model.number="tempHalamanSaatIni" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white dark:bg-gray-600 dark:text-white p-2" min="1">
                     </div>
                     <div>
@@ -77,13 +89,13 @@
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Notifikasi Bacaan</span>
-                        <button @click="toggleNotifikasi" :class="{'bg-green-600': isNotifikasiDiaktifkan, 'bg-gray-300': !isNotifikasiDiaktifkan}" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        <button @click="toggleNotifikasi" :class="{'bg-indigo-600': isNotifikasiDiaktifkan, 'bg-gray-300': !isNotifikasiDiaktifkan}" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                             <span :class="{'translate-x-6': isNotifikasiDiaktifkan, 'translate-x-1': !isNotifikasiDiaktifkan}" class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
                         </button>
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Pengingat Dzikir</span>
-                        <button @click="toggleDzikir" :class="{'bg-green-600': isDzikirEnabled, 'bg-gray-300': !isDzikirEnabled}" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        <button @click="toggleDzikir" :class="{'bg-indigo-600': isDzikirEnabled, 'bg-gray-300': !isDzikirEnabled}" class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                             <span :class="{'translate-x-6': isDzikirEnabled, 'translate-x-1': !isDzikirEnabled}" class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
                         </button>
                     </div>
@@ -100,7 +112,7 @@
         </div>
     </Transition>
 
-    <div class="flex-grow flex flex-col">
+    <div class="flex flex-col">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-extrabold text-gray-800 dark:text-white tracking-tight">Target Baca</h1>
             <div class="flex items-center gap-2">
@@ -114,65 +126,70 @@
             </div>
         </div>
 
-        <div class="flex-grow">
-            <div class="flex flex-col items-center mb-6">
-                <p class="text-center text-sm text-gray-500 dark:text-gray-400 max-w-xs">Catat kemajuan Anda dan capai target harian.</p>
+        <div class="flex flex-col items-center mb-6">
+            <p class="text-center text-sm text-gray-500 dark:text-gray-400 max-w-xs">Catat kemajuan Anda dan capai target harian.</p>
+        </div>
+
+        <div class="mb-2 bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 h-full rounded-full progress-bar" :style="{ width: progressPercentage + '%' }"></div>
+        </div>
+        <div class="text-center text-sm text-gray-600 dark:text-gray-400 mb-6 font-bold">
+            {{ Math.max(0, halamanCapaian - halamanSaatIni) }} / {{ targetHarian }} halaman ({{ Math.round(progressPercentage) }}%)
+        </div>
+
+        <Transition name="fade">
+            <div v-if="!isNotifikasiDiaktifkan" class="text-center text-red-500 text-sm mb-4">
+                <p>Notifikasi belum diaktifkan. ⚠️</p>
             </div>
-
-            <div class="mb-2 bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
-                <div class="bg-gradient-to-r from-indigo-500 to-purple-600 h-full rounded-full progress-bar" :style="{ width: progressPercentage + '%' }"></div>
+            <div v-else class="text-center text-green-600 text-sm mb-4">
+                <p>Notifikasi bacaan aktif. ✅</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Pengingat akan muncul pada jam {{ notificationTimes.join(', ') }} jika target belum tercapai.</p>
             </div>
-            <div class="text-center text-sm text-gray-600 dark:text-gray-400 mb-6 font-bold">
-                {{ halamanCapaian - halamanSaatIni }} / {{ targetHarian }} halaman ({{ Math.round(progressPercentage) }}%)
+        </Transition>
+
+        <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-2xl mb-6 shadow-inner border border-gray-100 dark:border-gray-600">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-600 dark:text-gray-200">Target Hingga Halaman</span>
+                <span class="text-sm font-bold text-gray-800 dark:text-white">{{ targetTotalHalaman }}</span>
             </div>
-
-            <Transition name="fade">
-                <div v-if="!isNotifikasiDiaktifkan" class="text-center text-red-500 text-sm mb-4">
-                    <p>Notifikasi belum diaktifkan. Anda mungkin melewatkan pengingat penting.</p>
-                </div>
-                <div v-else class="text-center text-green-600 text-sm mb-4">
-                    <p>Notifikasi bacaan aktif.</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Pengingat akan muncul pada jam {{ notificationTimes.join(', ') }} jika target belum tercapai.</p>
-                </div>
-            </Transition>
-
-            <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-2xl mb-6 shadow-inner border border-gray-100 dark:border-gray-600">
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-sm font-medium text-gray-600 dark:text-gray-200">Target Hingga Halaman</span>
-                    <span class="text-sm font-bold text-gray-800 dark:text-white">{{ targetTotalHalaman }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-medium text-gray-600 dark:text-gray-200">Kekurangan Target</span>
-                    <span :class="{'text-red-600 font-bold': kekuranganTarget > 0, 'text-green-600 font-bold': kekuranganTarget <= 0}">
-                        {{ kekuranganTarget > 0 ? kekuranganTarget + ' halaman' : 'Target Tercapai!' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="mt-8">
-                <h2 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">Rekap Mingguan</h2>
-                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl mb-4">
-                    <div class="text-sm font-medium text-gray-600 dark:text-gray-200">Halaman dibaca minggu ini</div>
-                    <div class="text-xl font-bold text-gray-800 dark:text-white">{{ rekapMingguan }} halaman / {{ rekapMingguan/20 }} Juz</div>
-                </div>
-
-                <h2 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">Riwayat Bacaan</h2>
-                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl h-60 overflow-y-auto">
-                    <div v-if="riwayatBacaan.length === 0" class="text-center text-gray-500 dark:text-gray-400 py-4">
-                        Belum ada riwayat bacaan.
-                    </div>
-                    <div v-else class="space-y-2">
-                        <div v-for="(hari, index) in riwayatBacaan.slice(0, 100)" :key="index" class="text-sm text-gray-800 dark:text-white">
-                            {{ formatTanggal(hari.tanggal) }}: {{ hari.dari }}-{{ hari.sampai }} ({{ hari.jumlah }} hal)
-                        </div>
-                    </div>
-                </div>
-                <br><br><br><br><br>
+            <div class="flex justify-between items-center">
+                <span class="text-sm font-medium text-gray-600 dark:text-gray-200">Kekurangan Target</span>
+                <span :class="{'text-red-600 font-bold': kekuranganTarget > 0, 'text-green-600 font-bold': kekuranganTarget <= 0}">
+                    {{ kekuranganTarget > 0 ? kekuranganTarget + ' halaman' : 'Target Tercapai! 🎉' }}
+                </span>
             </div>
         </div>
+
+        <div class="mt-4">
+            <h2 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">Rekap Mingguan</h2>
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl mb-6">
+                <div class="text-sm font-medium text-gray-600 dark:text-gray-200">Halaman dibaca minggu ini</div>
+                <div class="text-xl font-bold text-gray-800 dark:text-white">{{ rekapMingguan }} halaman</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ (rekapMingguan/20).toFixed(1) }} Juz (asumsi 1 Juz = 20 hal)</div>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h2 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">Riwayat Bacaan</h2>
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl max-h-60 overflow-y-auto">
+                <div v-if="riwayatBacaan.length === 0" class="text-center text-gray-500 dark:text-gray-400 py-4">
+                    Belum ada riwayat bacaan.
+                </div>
+                <div v-else class="space-y-2">
+                    <div v-for="(hari, index) in riwayatBacaan" :key="index" class="text-sm text-gray-800 dark:text-white flex justify-between items-center p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600">
+                        <span class="font-medium">{{ formatTanggal(hari.tanggal) }}</span>
+                        <span class="text-right">
+                            {{ hari.dari }} - {{ hari.sampai }} ({{ hari.jumlah }} hal)
+                            <span v-if="hari.targetTercapai" class="ml-1 text-green-500">🏆</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="h-20"></div> 
     </div>
 
-    <div class="fixed-bottom-section fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 p-6 rounded-t-3xl border-t border-gray-200 dark:border-gray-700 w-full sm:max-w-sm sm:mx-auto">
+    <div class="fixed-bottom-section fixed bottom-0 bg-white dark:bg-gray-800 p-6 rounded-t-3xl border-t border-gray-200 dark:border-gray-700 w-full">
         <label for="halamanCapaian" class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Sudah Sampai Halaman</label>
         <div class="flex items-center gap-2 mt-1">
             <button @click="decrementHalaman" aria-label="Kurangi" class="bg-indigo-600 text-white font-bold p-2 rounded-xl hover:bg-indigo-700 transition duration-300 w-12 h-12 flex items-center justify-center text-xl shadow-lg hover:shadow-xl">
@@ -189,517 +206,474 @@
 </div>
 
 <script>
+  
 /* =========================
-   Helper & Service Worker
-   ========================= */
+    Helper & Service Worker
+    ========================= */
 function log(...args) { console.log('[APP]', ...args); }
 function warn(...args) { console.warn('[APP]', ...args); }
 function err(...args) { console.error('[APP]', ...args); }
 
-// konversi base64 VAPID -> Uint8Array (jika butuh nanti)
-// function urlBase64ToUint8Array(base64String) { ... }
-
 function nextTimeFromHHmm(hhmm) {
-  const [h, m] = hhmm.split(':').map(s => Number(s));
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
-  if (d <= now) d.setDate(d.getDate() + 1);
-  return d;
+    const [h, m] = hhmm.split(':').map(s => Number(s));
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+    if (d <= now) d.setDate(d.getDate() + 1);
+    return d;
 }
 
 async function registerServiceWorkerForRepo() {
-  if (!('serviceWorker' in navigator)) {
-    warn('Service Worker tidak didukung.');
-    return null;
-  }
-  try {
-    // Tentukan base path: jika hosting di /targetBaca/ maka scope mesti /targetBaca/
-    // Kita ambil dari location.pathname: ambil bagian sampai folder terakhir sebelum file
-    // Contoh: https://nu2883.github.io/targetBaca/ -> base '/targetBaca/'
-    let base = location.pathname;
-    // Jika URL adalah /targetBaca/ atau /targetBaca/index.html -> kita ingin '/targetBaca/'
-    if (!base.endsWith('/')) {
-      base = base.substring(0, base.lastIndexOf('/') + 1);
+    if (!('serviceWorker' in navigator)) {
+        warn('Service Worker tidak didukung.');
+        return null;
     }
-    const swUrl = base + 'service-worker.js';
-    const reg = await navigator.serviceWorker.register(swUrl, { scope: base });
-    log('Service Worker registered:', swUrl, 'scope:', base);
+    try {
+        let base = location.pathname;
+        if (!base.endsWith('/')) {
+            base = base.substring(0, base.lastIndexOf('/') + 1);
+        }
+        const swUrl = base + 'service-worker.js'; 
+        const reg = await navigator.serviceWorker.register(swUrl, { scope: base });
+        log('Service Worker registered:', swUrl, 'scope:', base);
 
-    // simpan reg global untuk dipakai
-    window._sw_registration = reg;
+        window._sw_registration = reg;
 
-    // tunggu aktif
-    if (reg.installing) {
-      reg.installing.addEventListener('statechange', () => {
-        if (reg.active) initAfterSWReady(reg);
-      });
-    } else if (reg.active) {
-      initAfterSWReady(reg);
+        const initAfterSWReady = (r) => {
+             window._sw_registration = r;
+             if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ action: 'updateData', timestamp: Date.now() });
+             }
+        };
+
+        if (reg.installing) {
+            reg.installing.addEventListener('statechange', () => {
+                if (reg.active) initAfterSWReady(reg);
+            });
+        } else if (reg.active) {
+            initAfterSWReady(reg);
+        }
+        return reg;
+    } catch (e) {
+        err('registerServiceWorkerForRepo error', e);
+        return null;
     }
-    return reg;
-  } catch (e) {
-    err('registerServiceWorkerForRepo error', e);
-    return null;
-  }
-}
-
-function initAfterSWReady(reg) {
-  window._sw_registration = reg;
-  // kirim update data awal jika controller ada
-  if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ action: 'updateData', timestamp: Date.now() });
-  }
 }
 
 /* =========================
-   Notification / Scheduler
-   ========================= */
+    Notification / Scheduler
+    ========================= */
 
 let _notifTimerId = null;
 let _dzikirTimerId = null;
 
 async function ensureNotificationPermission() {
-  if (!('Notification' in window)) {
-    alert('Browser Anda tidak mendukung notifikasi.');
-    return false;
-  }
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') {
-    alert('Izin notifikasi ditolak. Ubah di pengaturan browser.');
-    return false;
-  }
-  const p = await Notification.requestPermission();
-  return p === 'granted';
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+    const p = await Notification.requestPermission();
+    return p === 'granted';
 }
 
-async function showNotificationNow({ title = 'Notifikasi', body = '', url = '/', icon = '/targetBaca/icon.png', tag } = {}) {
-  try {
-    const reg = window._sw_registration || await navigator.serviceWorker.getRegistration();
-    if (reg && typeof reg.showNotification === 'function') {
-      reg.showNotification(title, {
-        body,
-        icon,
-        badge: icon,
-        data: { url },
-        tag: tag || undefined
-      });
-    } else if (Notification.permission === 'granted') {
-      new Notification(title, { body, icon, data: { url }, tag: tag || undefined });
-    } else {
-      warn('Tidak punya permission untuk menampilkan notifikasi sekarang.');
+async function showNotificationNow({ title = 'Notifikasi', body = '', url = './', icon = './icon.png', tag } = {}) {
+    try {
+        const reg = window._sw_registration || await navigator.serviceWorker.getRegistration();
+        if (reg && typeof reg.showNotification === 'function') {
+            reg.showNotification(title, {
+                body,
+                icon: icon,
+                badge: icon,
+                data: { url },
+                tag: tag || undefined
+            });
+        } else if (Notification.permission === 'granted') {
+            new Notification(title, { body, icon, data: { url }, tag: tag || undefined });
+        }
+    } catch (e) {
+        err('showNotificationNow error', e);
     }
-  } catch (e) {
-    err('showNotificationNow error', e);
-  }
 }
 
 function scheduleNextNotification(notificationTimes = ['09:00','12:00','18:00'], checkTargetFn = () => true) {
-  // batalkan timer sebelumnya
-  if (_notifTimerId) { clearTimeout(_notifTimerId); _notifTimerId = null; }
+    if (_notifTimerId) { clearTimeout(_notifTimerId); _notifTimerId = null; }
 
-  // cari waktu terdekat dari daftar times
-  const now = new Date();
-  let nearest = null;
-  for (const t of notificationTimes) {
-    const d = nextTimeFromHHmm(t);
-    if (!nearest || d < nearest) nearest = d;
-  }
-  if (!nearest) return;
-  const ms = nearest.getTime() - now.getTime();
-  log('Menjadwalkan notifikasi berikutnya pada', nearest.toString(), `(${Math.round(ms/1000)}s)`);
-
-  _notifTimerId = setTimeout(async () => {
-    try {
-      if (typeof checkTargetFn === 'function' && !checkTargetFn()) {
-        log('Kondisi target terpenuhi -> melewatkan notifikasi ini.');
-      } else {
-        const nama = localStorage.getItem('namaUser') || '';
-        const body = nama ? `${nama}, ayo lanjut bacaan.` : 'Waktunya melanjutkan bacaan.';
-        await showNotificationNow({ title: 'Pengingat Bacaan', body, url: '/', icon: '/targetBaca/icon.png', tag: 'reading-notif' });
-      }
-    } catch (e) {
-      err('Error saat show scheduled notification', e);
-    } finally {
-      // jadwalkan lagi untuk waktu terdekat berikutnya
-      scheduleNextNotification(notificationTimes, checkTargetFn);
+    const now = new Date();
+    let nearest = null;
+    for (const t of notificationTimes) {
+        const d = nextTimeFromHHmm(t);
+        if (!nearest || d < nearest) nearest = d;
     }
-  }, ms);
+    if (!nearest) return;
+    const ms = nearest.getTime() - now.getTime();
+    log('Menjadwalkan notifikasi berikutnya pada', nearest.toString(), `(${Math.round(ms/1000)}s)`);
+
+    _notifTimerId = setTimeout(async () => {
+        try {
+            if (typeof checkTargetFn === 'function' && !checkTargetFn()) {
+                log('Kondisi target terpenuhi -> melewatkan notifikasi ini.');
+            } else {
+                const nama = localStorage.getItem('namaUser') || '';
+                const body = nama ? `${nama}, ayo lanjut bacaan.` : 'Waktunya melanjutkan bacaan.';
+                await showNotificationNow({ title: 'Pengingat Bacaan', body, url: './', icon: './icon.png', tag: 'reading-notif' }); 
+            }
+        } catch (e) {
+            err('Error saat show scheduled notification', e);
+        } finally {
+            scheduleNextNotification(notificationTimes, checkTargetFn);
+        }
+    }, ms);
 }
 
 function startDzikirInterval(minutes = 5) {
-  stopDzikirInterval();
-  if (!minutes || minutes <= 0) return;
-  // tampilkan segera sekali (opsional) lalu interval
-  (async () => {
-    const nama = localStorage.getItem('namaUser') || '';
-    const body = nama ? `${nama}, ayo berdzikir.` : 'Ayo berdzikir.';
-    await showNotificationNow({ title: 'Pengingat Dzikir', body, icon: '/targetBaca/icon.png', tag: 'dzikir-notif' });
-  })();
+    stopDzikirInterval();
+    if (!minutes || minutes <= 0) return;
+    
+    (async () => {
+        const nama = localStorage.getItem('namaUser') || '';
+        const body = nama ? `${nama}, ayo berdzikir.` : 'Ayo berdzikir.';
+        await showNotificationNow({ title: 'Pengingat Dzikir', body, icon: './icon.png', tag: 'dzikir-notif' });
+    })();
 
-  _dzikirTimerId = setInterval(async () => {
-    try {
-      const nama = localStorage.getItem('namaUser') || '';
-      const body = nama ? `${nama}, ayo berdzikir.` : 'Ayo berdzikir.';
-      await showNotificationNow({ title: 'Pengingat Dzikir', body, icon: '/targetBaca/icon.png', tag: 'dzikir-notif' });
-    } catch (e) {
-      err('dzikir interval error', e);
-    }
-  }, minutes * 60 * 1000);
+    _dzikirTimerId = setInterval(async () => {
+        try {
+            const nama = localStorage.getItem('namaUser') || '';
+            const body = nama ? `${nama}, ayo berdzikir.` : 'Ayo berdzikir.';
+            await showNotificationNow({ title: 'Pengingat Dzikir', body, icon: './icon.png', tag: 'dzikir-notif' });
+        } catch (e) {
+            err('dzikir interval error', e);
+        }
+    }, minutes * 60 * 1000);
 }
 
 function stopDzikirInterval() {
-  if (_dzikirTimerId) {
-    clearInterval(_dzikirTimerId);
-    _dzikirTimerId = null;
-  }
+    if (_dzikirTimerId) {
+        clearInterval(_dzikirTimerId);
+        _dzikirTimerId = null;
+    }
 }
 
 function stopScheduledNotifications() {
-  if (_notifTimerId) { clearTimeout(_notifTimerId); _notifTimerId = null; }
+    if (_notifTimerId) { clearTimeout(_notifTimerId); _notifTimerId = null; }
 }
 
 /* =========================
-   Vue App (lengkap)
-   ========================= */
+    Vue App (lengkap)
+    ========================= */
 
 const app = Vue.createApp({
-  data() {
-    const readNumber = (key, fallback) => {
-      const raw = localStorage.getItem(key);
-      const n = Number(raw);
-      return Number.isFinite(n) && !Number.isNaN(n) ? n : fallback;
-    };
-    const savedDarkMode = localStorage.getItem('darkMode');
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialDarkMode = savedDarkMode !== null ? savedDarkMode === 'true' : systemPrefersDark;
-    if (initialDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-
-    const savedTimes = JSON.parse(localStorage.getItem('notificationTimes') || 'null');
-
-    return {
-      namaUser: localStorage.getItem('namaUser') || '',
-      halamanSaatIni: readNumber('halamanSaatIni', 1),
-      halamanCapaian: readNumber('halamanCapaian', readNumber('halamanSaatIni', 1)),
-      targetHarian: readNumber('targetHarian', 20),
-
-      isNotifikasiDiaktifkan: localStorage.getItem('isNotifikasiDiaktifkan') === 'true',
-      isDzikirEnabled: localStorage.getItem('isDzikirEnabled') === 'true',
-      dzikirMenit: readNumber('dzikirMenit', 5),
-
-      notificationTimes: savedTimes || ['09:00', '12:00', '18:00'],
-
-      darkMode: initialDarkMode,
-      showSettingsModal: false,
-      riwayatBacaan: JSON.parse(localStorage.getItem('riwayatBacaan') || '[]'),
-      showAllHistory: false,
-
-      tempNamaUser: localStorage.getItem('namaUser') || '',
-      tempHalamanSaatIni: readNumber('halamanSaatIni', 1),
-      tempTargetHarian: readNumber('targetHarian', 20),
-      tempDzikirMenit: readNumber('dzikirMenit', 5),
-      tempNotificationTimes: savedTimes ? savedTimes.join(', ') : '09:00, 12:00, 18:00'
-    };
-  },
-  computed: {
-    kekuranganTarget() {
-      const kekurangan = this.targetHarian - (this.halamanCapaian - this.halamanSaatIni);
-      return Math.max(0, kekurangan);
-    },
-    targetTotalHalaman() {
-      return this.halamanSaatIni + this.targetHarian;
-    },
-    progressPercentage() {
-      const progress = this.halamanCapaian - this.halamanSaatIni;
-      return Math.min((progress / this.targetHarian) * 100, 100);
-    },
-    rekapMingguan() {
-      const today = new Date();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
-      startOfWeek.setHours(0, 0, 0, 0);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      return this.riwayatBacaan.reduce((total, hari) => {
-        const tanggalRiwayat = new Date(hari.tanggal);
-        if (tanggalRiwayat >= startOfWeek && tanggalRiwayat <= endOfWeek) {
-          return total + hari.jumlah;
-        }
-        return total;
-      }, 0);
-    }
-  },
-  watch: {
-    halamanCapaian(newValue, oldValue) {
-      if (newValue !== oldValue) {
-        localStorage.setItem('halamanCapaian', String(newValue));
-        this.simpanRiwayat();
-        // update scheduler condition
-        if (this.isNotifikasiDiaktifkan) {
-          // reschedule to respect updated kekuranganTarget
-          scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
-        }
-      }
-    },
-    darkMode(newValue) {
-      localStorage.setItem('darkMode', newValue);
-      document.documentElement.classList.toggle('dark', newValue);
-    },
-    isNotifikasiDiaktifkan(newValue) {
-      localStorage.setItem('isNotifikasiDiaktifkan', newValue);
-      if (newValue) {
-        (async () => {
-          if (await ensureNotificationPermission()) {
-            scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
-            // kirim data ke SW
-            if (navigator.serviceWorker.controller) {
-              navigator.serviceWorker.controller.postMessage({
-                action: 'updateData',
-                namaUser: this.namaUser,
-                notificationTimes: [...this.notificationTimes],
-                halamanCapaian: this.halamanCapaian,
-                targetHarian: this.targetHarian
-              });
-            }
-          } else {
-            this.isNotifikasiDiaktifkan = false;
-          }
-        })();
-      } else {
-        stopScheduledNotifications();
-        // send stop message to SW (optional)
-        if (navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
-        }
-      }
-    },
-    isDzikirEnabled(newValue) {
-      localStorage.setItem('isDzikirEnabled', newValue);
-      if (newValue) {
-        (async () => {
-          if (await ensureNotificationPermission()) {
-            startDzikirInterval(this.dzikirMenit);
-            if (navigator.serviceWorker.controller) {
-              navigator.serviceWorker.controller.postMessage({ action: 'updateData', isDzikirEnabled: true, dzikirMenit: this.dzikirMenit });
-            }
-          } else {
-            this.isDzikirEnabled = false;
-          }
-        })();
-      } else {
-        stopDzikirInterval();
-        if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ action: 'updateData', isDzikirEnabled: false });
-      }
-    },
-    kekuranganTarget(newValue, oldValue) {
-      if (newValue <= 0 && oldValue > 0) {
-        // target tercapai -> hentikan notifikasi jadwal
-        stopScheduledNotifications();
-        console.log("Target harian tercapai, notifikasi dihentikan.");
-      }
-      // kirim updateData ke SW agar SW punya snapshot terbaru (jika mau)
-      if (navigator.serviceWorker.controller) {
-        const payload = {
-          action: 'updateData',
-          namaUser: this.namaUser,
-          kekuranganTarget: this.kekuranganTarget,
-          halamanCapaian: this.halamanCapaian,
-          targetHarian: this.targetHarian,
-          notificationTimes: [...this.notificationTimes]
+    data() {
+        const readNumber = (key, fallback) => {
+            const raw = localStorage.getItem(key);
+            const n = Number(raw);
+            return Number.isFinite(n) && !Number.isNaN(n) ? n : fallback;
         };
-        navigator.serviceWorker.controller.postMessage(payload);
-      }
-    }
-  },
-  methods: {
-    initNotifications() {
-      // dipanggil setelah SW siap
-      if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
-        scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
-      }
-      if (this.isDzikirEnabled && Notification.permission === 'granted') {
-        startDzikirInterval(this.dzikirMenit);
-      }
-    },
-    incrementHalaman() { this.halamanCapaian++; },
-    decrementHalaman() { if (this.halamanCapaian > 1) this.halamanCapaian--; },
-    openSettingsModal() {
-      this.tempNamaUser = this.namaUser;
-      this.tempHalamanSaatIni = this.halamanSaatIni;
-      this.tempTargetHarian = this.targetHarian;
-      this.tempDzikirMenit = this.dzikirMenit;
-      this.tempNotificationTimes = this.notificationTimes.join(', ');
-      this.showSettingsModal = true;
-    },
-    closeSettingsModal() { this.showSettingsModal = false; },
-    saveAndCloseSettings() {
-      this.namaUser = this.tempNamaUser || '';
-      this.halamanSaatIni = Math.max(1, Number(this.tempHalamanSaatIni) || 1);
-      this.targetHarian = Math.max(1, Number(this.tempTargetHarian) || 1);
-      this.dzikirMenit = Math.max(1, Number(this.tempDzikirMenit) || 5);
+        const savedDarkMode = localStorage.getItem('darkMode');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialDarkMode = savedDarkMode !== null ? savedDarkMode === 'true' : systemPrefersDark;
+        if (initialDarkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
 
-      const newTimes = this.tempNotificationTimes.split(',').map(s => s.trim()).filter(s => s.match(/^\d{1,2}:\d{2}$/));
-      this.notificationTimes = newTimes.length > 0 ? newTimes : ['09:00', '12:00', '18:00'];
+        const savedTimes = JSON.parse(localStorage.getItem('notificationTimes') || 'null');
+        
+        const initialHalamanSaatIni = readNumber('halamanSaatIni', 1);
+        const initialHalamanCapaian = readNumber('halamanCapaian', initialHalamanSaatIni);
 
-      localStorage.setItem('namaUser', this.namaUser);
-      localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
-      localStorage.setItem('targetHarian', String(this.targetHarian));
-      localStorage.setItem('dzikirMenit', String(this.dzikirMenit));
-      localStorage.setItem('notificationTimes', JSON.stringify(this.notificationTimes));
+        return {
+            namaUser: localStorage.getItem('namaUser') || '',
+            halamanSaatIni: initialHalamanSaatIni,
+            halamanCapaian: initialHalamanCapaian,
+            targetHarian: readNumber('targetHarian', 20),
 
-      // reschedule jika notifikasi aktif
-      if (this.isNotifikasiDiaktifkan) {
-        scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
-      }
-      if (this.isDzikirEnabled) {
-        startDzikirInterval(this.dzikirMenit);
-      } else {
-        stopDzikirInterval();
-      }
+            isNotifikasiDiaktifkan: localStorage.getItem('isNotifikasiDiaktifkan') === 'true',
+            isDzikirEnabled: localStorage.getItem('isDzikirEnabled') === 'true',
+            dzikirMenit: readNumber('dzikirMenit', 5),
 
-      this.showSettingsModal = false;
-    },
-    toggleDarkMode() { this.darkMode = !this.darkMode; },
-    formatTanggal(tanggalString) {
-      const date = new Date(tanggalString);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}${month}${day}`;
-    },
-    simpanRiwayat() {
-      const today = new Date().toISOString().split('T')[0];
-      const existingIndex = this.riwayatBacaan.findIndex(item => item.tanggal === today);
-      const riwayatHariIni = {
-        tanggal: today,
-        dari: this.halamanSaatIni,
-        sampai: this.halamanCapaian,
-        jumlah: this.halamanCapaian - this.halamanSaatIni,
-        target: this.targetHarian,
-        targetTercapai: (this.halamanCapaian - this.halamanSaatIni) >= this.targetHarian
-      };
-      if (existingIndex >= 0) {
-        this.riwayatBacaan.splice(existingIndex, 1, riwayatHariIni);
-      } else {
-        this.riwayatBacaan.unshift(riwayatHariIni);
-      }
-      localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
-    },
-    async toggleNotifikasi() {
-      if (!("Notification" in window)) {
-        alert('Browser Anda tidak mendukung notifikasi.');
-        return;
-      }
-      if (Notification.permission === 'denied') {
-        alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
-        return;
-      }
-      if (this.isNotifikasiDiaktifkan) {
-        this.isNotifikasiDiaktifkan = false;
-      } else {
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-          this.isNotifikasiDiaktifkan = true;
-        } else {
-          this.isNotifikasiDiaktifkan = false;
-        }
-      }
-    },
-    mulaiNotifikasi() {
-      // dipanggil jika ingin memaksa notifikasi segera (button test)
-      if (this.isNotifikasiDiaktifkan) {
-        showNotificationNow({ title: 'Tes Notifikasi', body: 'Ini notifikasi tes', icon: '/targetBaca/icon.png' });
-      } else {
-        alert('Aktifkan notifikasi terlebih dahulu.');
-      }
-    },
-    stopNotifikasi() {
-      this.isNotifikasiDiaktifkan = false;
-      stopScheduledNotifications();
-      if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ action: 'stopNotifications' });
-    },
-    async toggleDzikir() {
-      if (!("Notification" in window)) {
-        alert('Browser Anda tidak mendukung notifikasi.');
-        return;
-      }
-      if (Notification.permission === 'denied') {
-        alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
-        return;
-      }
-      if (this.isDzikirEnabled) {
-        this.isDzikirEnabled = false;
-      } else {
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-          this.isDzikirEnabled = true;
-        } else {
-          this.isDzikirEnabled = false;
-        }
-      }
-    },
-    mulaiDzikir() {
-      if (this.isDzikirEnabled) startDzikirInterval(this.dzikirMenit);
-    },
-    stopDzikir() {
-      stopDzikirInterval();
-    }
-  },
-  async mounted() {
-    // handle lastAccessedDate logic (copy dari kode Anda)
-    function localDateKey() {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    }
-    const lastAccessedDate = localStorage.getItem('lastAccessedDate');
-    const todayKey = localDateKey();
+            notificationTimes: savedTimes || ['09:00', '12:00', '18:00'],
 
-    if (lastAccessedDate !== todayKey) {
-      const lastCapaian = Number(localStorage.getItem('halamanCapaian')) || this.halamanSaatIni;
-      const halamanAwalHariLalu = Number(localStorage.getItem('halamanSaatIni')) || 1;
-      const riwayatHariLalu = this.riwayatBacaan.find(item => item.tanggal === lastAccessedDate);
-      if (lastAccessedDate && !riwayatHariLalu) {
-        const riwayatKemarin = {
-          tanggal: lastAccessedDate,
-          dari: halamanAwalHariLalu,
-          sampai: lastCapaian,
-          jumlah: lastCapaian - halamanAwalHariLalu,
-          target: this.targetHarian,
-          targetTercapai: (lastCapaian - halamanAwalHariLalu) >= this.targetHarian
+            darkMode: initialDarkMode,
+            showSettingsModal: false,
+            // Riwayat akan di-load dan dibersihkan di mounted()
+            riwayatBacaan: JSON.parse(localStorage.getItem('riwayatBacaan') || '[]'),
+            
+            tempNamaUser: localStorage.getItem('namaUser') || '',
+            tempHalamanSaatIni: initialHalamanSaatIni,
+            tempTargetHarian: readNumber('targetHarian', 20),
+            tempDzikirMenit: readNumber('dzikirMenit', 5),
+            tempNotificationTimes: savedTimes ? savedTimes.join(', ') : '09:00, 12:00, 18:00'
         };
-        this.riwayatBacaan.unshift(riwayatKemarin);
-        localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
-      }
-      this.halamanSaatIni = lastCapaian;
-      this.halamanCapaian = lastCapaian;
-      localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
-      localStorage.setItem('halamanCapaian', String(this.halamanCapaian));
-      localStorage.setItem('lastAccessedDate', todayKey);
-    }
+    },
+    computed: {
+        kekuranganTarget() {
+            const pagesReadToday = Math.max(0, this.halamanCapaian - this.halamanSaatIni);
+            const kekurangan = this.targetHarian - pagesReadToday;
+            return Math.max(0, kekurangan);
+        },
+        targetTotalHalaman() {
+            return this.halamanSaatIni + this.targetHarian;
+        },
+        progressPercentage() {
+            const progress = Math.max(0, this.halamanCapaian - this.halamanSaatIni);
+            return Math.min((progress / this.targetHarian) * 100, 100);
+        },
+        rekapMingguan() {
+            const today = new Date();
+            const dayOfWeek = today.getDay(); // 0 = Minggu, 1 = Senin, ...
+            const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - daysToSubtract);
+            startOfWeek.setHours(0, 0, 0, 0);
 
-    // Registrasi Service Worker (sesuaikan scope otomatis)
-    await registerServiceWorkerForRepo();
+            return this.riwayatBacaan.reduce((total, hari) => {
+                const tanggalRiwayat = new Date(hari.tanggal);
+                if (tanggalRiwayat >= startOfWeek && tanggalRiwayat <= today) {
+                    return total + hari.jumlah;
+                }
+                return total;
+            }, 0);
+        }
+    },
+    watch: {
+        halamanCapaian(newValue, oldValue) {
+            if (newValue !== oldValue) {
+                localStorage.setItem('halamanCapaian', String(newValue));
+                this.simpanRiwayat();
+                if (this.isNotifikasiDiaktifkan) {
+                    scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+                }
+            }
+        },
+        darkMode(newValue) {
+            localStorage.setItem('darkMode', newValue);
+            document.documentElement.classList.toggle('dark', newValue);
+        },
+        isNotifikasiDiaktifkan(newValue) {
+            localStorage.setItem('isNotifikasiDiaktifkan', newValue);
+            if (newValue) {
+                (async () => {
+                    if (await ensureNotificationPermission()) {
+                        scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+                    } else {
+                        this.isNotifikasiDiaktifkan = false;
+                    }
+                })();
+            } else {
+                stopScheduledNotifications();
+            }
+        },
+        isDzikirEnabled(newValue) {
+            localStorage.setItem('isDzikirEnabled', newValue);
+            if (newValue) {
+                (async () => {
+                    if (await ensureNotificationPermission()) {
+                        startDzikirInterval(this.dzikirMenit);
+                    } else {
+                        this.isDzikirEnabled = false;
+                    }
+                })();
+            } else {
+                stopDzikirInterval();
+            }
+        },
+        kekuranganTarget(newValue, oldValue) {
+            if (newValue <= 0 && oldValue > 0) {
+                stopScheduledNotifications();
+                log("Target harian tercapai, notifikasi dihentikan.");
+            }
+        }
+    },
+    methods: {
+        initNotifications() {
+            if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
+                scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+            }
+            if (this.isDzikirEnabled && Notification.permission === 'granted') {
+                startDzikirInterval(this.dzikirMenit);
+            }
+        },
+        incrementHalaman() { 
+            this.halamanCapaian = Math.max(this.halamanSaatIni, this.halamanCapaian + 1); 
+        },
+        decrementHalaman() { 
+            this.halamanCapaian = Math.max(this.halamanSaatIni, this.halamanCapaian - 1); 
+        },
+        openSettingsModal() {
+            this.tempNamaUser = this.namaUser;
+            this.tempHalamanSaatIni = this.halamanSaatIni;
+            this.tempTargetHarian = this.targetHarian;
+            this.tempDzikirMenit = this.dzikirMenit;
+            this.tempNotificationTimes = this.notificationTimes.join(', ');
+            this.showSettingsModal = true;
+        },
+        closeSettingsModal() { this.showSettingsModal = false; },
+        saveAndCloseSettings() {
+            this.namaUser = this.tempNamaUser || '';
+            this.halamanSaatIni = Math.max(1, Number(this.tempHalamanSaatIni) || 1);
+            this.targetHarian = Math.max(1, Number(this.tempTargetHarian) || 1);
+            this.dzikirMenit = Math.max(1, Number(this.tempDzikirMenit) || 5);
 
-    // Init notifikasi/dzikir jika permission sudah granted dan flag aktif
-    if (this.isNotifikasiDiaktifkan && Notification.permission === 'granted') {
-      scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
-    }
-    if (this.isDzikirEnabled && Notification.permission === 'granted') {
-      startDzikirInterval(this.dzikirMenit);
-    }
+            const newTimes = this.tempNotificationTimes.split(',').map(s => s.trim()).filter(s => s.match(/^\d{1,2}:\d{2}$/));
+            this.notificationTimes = newTimes.length > 0 ? newTimes : ['09:00', '12:00', '18:00'];
 
-    // listen message dari SW (opsional, untuk debug)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (ev) => {
-        log('msg from SW', ev.data);
-      });
+            localStorage.setItem('namaUser', this.namaUser);
+            localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
+            localStorage.setItem('targetHarian', String(this.targetHarian));
+            localStorage.setItem('dzikirMenit', String(this.dzikirMenit));
+            localStorage.setItem('notificationTimes', JSON.stringify(this.notificationTimes));
+            
+            this.halamanCapaian = Math.max(this.halamanCapaian, this.halamanSaatIni); 
+
+            if (this.isNotifikasiDiaktifkan) {
+                scheduleNextNotification(this.notificationTimes, () => this.kekuranganTarget > 0);
+            }
+            if (this.isDzikirEnabled) {
+                startDzikirInterval(this.dzikirMenit);
+            } else {
+                stopDzikirInterval();
+            }
+
+            this.showSettingsModal = false;
+        },
+
+        simpanRiwayat() {
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Cari index riwayat hari ini (membandingkan hanya YYYY-MM-DD)
+            const existingIndex = this.riwayatBacaan.findIndex(item => {
+                return item.tanggal && item.tanggal.substring(0, 10) === today;
+            });
+
+            const jumlahDibaca = Math.max(0, this.halamanCapaian - this.halamanSaatIni); 
+
+            const riwayatHariIni = {
+                tanggal: new Date().toISOString(),
+                dari: this.halamanSaatIni,
+                sampai: this.halamanCapaian,
+                jumlah: jumlahDibaca,
+                target: this.targetHarian,
+                targetTercapai: jumlahDibaca >= this.targetHarian
+            };
+
+            if (existingIndex >= 0) {
+                // Update riwayat yang sudah ada
+                this.riwayatBacaan.splice(existingIndex, 1, riwayatHariIni);
+            } else {
+                // Tambahkan riwayat baru di awal
+                this.riwayatBacaan.unshift(riwayatHariIni);
+            }
+            
+            // Urutkan ulang (terbaru di atas)
+            this.riwayatBacaan.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+            localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
+        },
+        
+        formatTanggal(tanggalString) {
+            const date = new Date(tanggalString);
+            if (isNaN(date.getTime())) return 'Tanggal Invalid'; 
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${day}/${month}/${year}`; 
+        },
+
+        toggleDarkMode() { this.darkMode = !this.darkMode; },
+        
+        async toggleNotifikasi() {
+            if (!("Notification" in window)) {
+                alert('Browser Anda tidak mendukung notifikasi.');
+                return;
+            }
+            if (Notification.permission === 'denied') {
+                alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
+                return;
+            }
+            if (this.isNotifikasiDiaktifkan) {
+                this.isNotifikasiDiaktifkan = false;
+            } else {
+                const permission = await Notification.requestPermission();
+                if (permission === "granted") {
+                    this.isNotifikasiDiaktifkan = true;
+                } else {
+                    this.isNotifikasiDiaktifkan = false;
+                }
+            }
+        },
+        async toggleDzikir() {
+            if (!("Notification" in window)) {
+                alert('Browser Anda tidak mendukung notifikasi.');
+                return;
+            }
+            if (Notification.permission === 'denied') {
+                alert('Izin notifikasi ditolak. Silakan ubah di pengaturan browser Anda.');
+                return;
+            }
+            if (this.isDzikirEnabled) {
+                this.isDzikirEnabled = false;
+            } else {
+                const permission = await Notification.requestPermission();
+                if (permission === "granted") {
+                    this.isDzikirEnabled = true;
+                } else {
+                    this.isDzikirEnabled = false;
+                }
+            }
+        },
+
+        // FUNGSI BARU: Membersihkan duplikasi riwayat bacaan pada tanggal yang sama.
+        bersihkanDuplikatRiwayat() {
+            const uniqueHistory = [];
+            const datesSeen = new Set();
+            
+            // Urutkan data berdasarkan tanggal (terbaru ke terlama) untuk memastikan entry terbaru yang tersimpan jika ada duplikat
+            const sortedHistory = this.riwayatBacaan.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+
+            for (const entry of sortedHistory) {
+                const dateKey = entry.tanggal ? entry.tanggal.substring(0, 10) : null;
+                if (dateKey && !datesSeen.has(dateKey)) {
+                    datesSeen.add(dateKey);
+                    uniqueHistory.push(entry);
+                }
+            }
+
+            if (uniqueHistory.length !== this.riwayatBacaan.length) {
+                log(`Ditemukan dan dihapus ${this.riwayatBacaan.length - uniqueHistory.length} duplikasi riwayat.`);
+                this.riwayatBacaan = uniqueHistory;
+                localStorage.setItem('riwayatBacaan', JSON.stringify(this.riwayatBacaan));
+            } else {
+                 this.riwayatBacaan = uniqueHistory; // Pastikan data diurutkan dan bersih
+            }
+        }
+    },
+    async mounted() {
+        // PENTING: Bersihkan duplikat data lama sebelum memproses hari baru
+        this.bersihkanDuplikatRiwayat(); 
+
+        // Logika Pergantian Hari
+        function localDateKey() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        const lastAccessedDate = localStorage.getItem('lastAccessedDate');
+        const todayDateKey = localDateKey();
+
+        if (lastAccessedDate && lastAccessedDate !== todayDateKey) {
+            this.halamanSaatIni = this.halamanCapaian;
+            localStorage.setItem('halamanSaatIni', String(this.halamanSaatIni));
+            log('Hari berganti, halamanSaatIni diupdate ke', this.halamanSaatIni);
+        }
+        
+        localStorage.setItem('lastAccessedDate', todayDateKey);
+        
+        if (this.halamanCapaian < this.halamanSaatIni) {
+            this.halamanCapaian = this.halamanSaatIni;
+            localStorage.setItem('halamanCapaian', String(this.halamanCapaian));
+        }
+        
+        await registerServiceWorkerForRepo();
+        this.initNotifications();
     }
-  }
 });
 
 app.mount('#app');
 </script>
-
+</script>
 </body>
 </html>
